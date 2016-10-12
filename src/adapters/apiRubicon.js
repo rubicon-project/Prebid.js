@@ -76,7 +76,8 @@ apiRubiconAdapter = function RubiconAdapter() {
           handleRpCB(this.responseText, callbackId);
         }
       };
-      xhttp.open('GET', bidderUrl, true);
+      xhttp.open("GET", bidderUrl, true);
+      xhttp.withCredentials = true;
       xhttp.send();
     }
 
