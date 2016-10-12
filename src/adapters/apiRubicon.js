@@ -104,33 +104,6 @@ apiRubiconAdapter = function RubiconAdapter() {
     optimizedCall = utils.tryAppendQueryString(optimizedCall, 'account_id', accountId);
     optimizedCall = utils.tryAppendQueryString(optimizedCall, 'site_id', siteId);
     optimizedCall = utils.tryAppendQueryString(optimizedCall, 'zone_id', zoneId);
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rf', utils.getTopWindowUrl());
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'p_pos', position);
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'kw', keyword);
-
-    if (visitor && typeof visitor === 'object') {
-      for (var vkey in visitor) {
-        if (visitor.hasOwnProperty(vkey)) {
-          if (visitor[vkey] && (typeof visitor[vkey] === 'string' || typeof visitor[vkey] === 'number' || typeof visitor[vkey] === 'boolean')) {
-            optimizedCall = utils.tryAppendQueryString(optimizedCall, 'tg_v.'+vkey, visitor[vkey]);
-          }
-        }
-      }
-    }
-
-    if (inventory && typeof inventory === 'object') {
-      for (var ikey in inventory) {
-        if (inventory.hasOwnProperty(ikey)) {
-          if (inventory[ikey] && (typeof inventory[ikey] === 'string' || typeof inventory[ikey] === 'number' || typeof inventory[ikey] === 'boolean')) {
-            optimizedCall = utils.tryAppendQueryString(optimizedCall, 'tg_v.'+ikey, inventory[ikey]);
-          }
-        }
-      }
-    }
-
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rp_floor', '0.01');
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'tk_flint', '$$PREBID_GLOBAL$$.api');
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'cb', Math.random());
 
     //sizes takes a bit more logic
     var sizeQueryString = '';
@@ -158,6 +131,35 @@ apiRubiconAdapter = function RubiconAdapter() {
     if (sizeQueryString) {
       optimizedCall += sizeQueryString + '&';
     }
+
+    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'p_pos', position);
+    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rp_floor', '0.01');
+    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'tk_flint', 'pbjs.rapid');
+    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'p_screen_res', window.screen.availWidth +'x'+ window.screen.availHeight);
+    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'kw', keyword);
+
+    if (visitor && typeof visitor === 'object') {
+      for (var vkey in visitor) {
+        if (visitor.hasOwnProperty(vkey)) {
+          if (visitor[vkey] && (typeof visitor[vkey] === 'string' || typeof visitor[vkey] === 'number' || typeof visitor[vkey] === 'boolean')) {
+            optimizedCall = utils.tryAppendQueryString(optimizedCall, 'tg_v.'+vkey, visitor[vkey]);
+          }
+        }
+      }
+    }
+
+    if (inventory && typeof inventory === 'object') {
+      for (var ikey in inventory) {
+        if (inventory.hasOwnProperty(ikey)) {
+          if (inventory[ikey] && (typeof inventory[ikey] === 'string' || typeof inventory[ikey] === 'number' || typeof inventory[ikey] === 'boolean')) {
+            optimizedCall = utils.tryAppendQueryString(optimizedCall, 'tg_v.'+ikey, inventory[ikey]);
+          }
+        }
+      }
+    }
+
+    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rand', Math.random());
+    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rf', utils.getTopWindowUrl());
 
     //remove the trailing "&"
     if (optimizedCall.lastIndexOf('&') === optimizedCall.length - 1) {
