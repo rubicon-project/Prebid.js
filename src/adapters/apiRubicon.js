@@ -98,6 +98,7 @@ apiRubiconAdapter = function RubiconAdapter() {
     var keyword = utils.getBidIdParamater('keyword', bid.params);
     var visitor = utils.getBidIdParamater('visitor', bid.params);
     var inventory = utils.getBidIdParamater('inventory', bid.params);
+    var pageUrl = utils.getBidIdParamater('referrer', bid.params);
 
     //build our base tag, based on if we are http or https
     var optimizedCall = 'http' + (document.location.protocol === 'https:' ? 's:' : ':')  + '//optimized-by.rubiconproject.com/a/api/fastlane.json?';
@@ -136,7 +137,7 @@ apiRubiconAdapter = function RubiconAdapter() {
     optimizedCall = utils.tryAppendQueryString(optimizedCall, 'p_pos', position);
     optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rp_floor', '0.01');
     optimizedCall = utils.tryAppendQueryString(optimizedCall, 'tk_flint', 'pbjs.rapid');
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'p_screen_res', window.screen.availWidth +'x'+ window.screen.availHeight);
+    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'p_screen_res', window.screen.width +'x'+ window.screen.height);
     optimizedCall = utils.tryAppendQueryString(optimizedCall, 'kw', keyword);
 
     if (visitor && typeof visitor === 'object') {
@@ -160,7 +161,7 @@ apiRubiconAdapter = function RubiconAdapter() {
     }
 
     optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rand', Math.random());
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rf', utils.getTopWindowUrl());
+    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rf', pageUrl === '' ? utils.getTopWindowUrl() : pageUrl);
 
     //remove the trailing "&"
     if (optimizedCall.lastIndexOf('&') === optimizedCall.length - 1) {
