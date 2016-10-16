@@ -2,15 +2,13 @@
  * @file apiRubicon (apiRubicon) adapter
  */
 
-import { getBidRequest } from '../utils.js';
-
 var CONSTANTS = require('../constants.json');
 var utils = require('../utils.js');
 var bidmanager = require('../bidmanager.js');
 var bidfactory = require('../bidfactory.js');
+var ajax = require("../ajax.js").ajax;
 
-var apiRubiconAdapter;
-apiRubiconAdapter = function RubiconAdapter() {
+function RubiconAdapter() {
 
   var sizeMap = {
     1:'468x60',
@@ -37,147 +35,81 @@ apiRubiconAdapter = function RubiconAdapter() {
     113:'1000x300',
     117:'320x100',
     125:'800x250',
-    126:'200x600',
-    '468x60': 1,
-    '728x90': 2,
-    '120x600': 8,
-    '160x600': 9,
-    '300x600': 10,
-    '300x250': 15,
-    '336x280': 16,
-    '320x50': 43,
-    '300x50': 44,
-    '300x1050': 54,
-    '970x90': 55,
-    '970x250': 57,
-    '1000x90': 58,
-    '320x80': 59,
-    '640x480': 65,
-    '320x480': 67,
-    '1800x1000': 68,
-    '320x320': 72,
-    '320x160': 73,
-    '480x320': 101,
-    '768x1024': 102,
-    '1000x300': 113,
-    '320x100': 117,
-    '800x250': 125,
-    '200x600': 126
+    126:'200x600'
   };
+  utils._each(sizeMap, (item, key) => sizeMap[item] = key);
 
   function _callBids(params) {
-
     var bids = params.bids || [];
 
-    function xhr(bidderUrl, callbackId) {
-      var xhttp = new XMLHttpRequest();
-      xhttp.onreadystatechange = function() {
-        if (this.readyState === 4 && this.status === 200) {
-          handleRpCB(this.responseText, callbackId);
-        }
-      };
-      xhttp.open('GET', bidderUrl, true);
-      xhttp.withCredentials = true;
-      xhttp.send();
-    }
+    bids.forEach(bid => ajax(buildOptimizedCall(bid), responseText => {
+      try {
+        utils.logMessage('XHR callback function called for ad ID: ' + bid.bidId);
+        handleRpCB(responseText, bid);
+      } catch(err) {
+        utils.logError('Error processing response in apiRubicon for placement code ' + bid.placementCode, null, err);
 
-    for (var i = 0; i < bids.length; i++) {
-      var bidRequest = bids[i];
-      var callbackId = bidRequest.bidId;
-
-      xhr(buildOptimizedCall(bidRequest), callbackId);
-    }
+        //indicate that there is no bid for this placement
+        let badBid = bidfactory.createBid(2, bid);
+        badBid.bidderCode = bid.bidderCode;
+        badBid.error = err;
+        bidmanager.addBidResponse(bid.placementCode, badBid);
+      }
+    }));
   }
 
   function buildOptimizedCall(bid) {
-
-    var accountId = utils.getBidIdParamater('accountId', bid.params);
-    var siteId = utils.getBidIdParamater('siteId', bid.params);
-    var zoneId = utils.getBidIdParamater('zoneId', bid.params);
-    var position = utils.getBidIdParamater('position', bid.params) || 'btf';
-    var keyword = utils.getBidIdParamater('keyword', bid.params);
-    var visitor = utils.getBidIdParamater('visitor', bid.params);
-    var inventory = utils.getBidIdParamater('inventory', bid.params);
-    var pageUrl = utils.getBidIdParamater('referrer', bid.params);
-
-    //build our base tag, based on if we are http or https
-    var optimizedCall = 'http' + (document.location.protocol === 'https:' ? 's:' : ':')  + '//optimized-by.rubiconproject.com/a/api/fastlane.json?';
-
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'account_id', accountId);
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'site_id', siteId);
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'zone_id', zoneId);
-
-    //sizes takes a bit more logic
-    var sizeQueryString = '';
-    var parsedSizes = utils.parseSizesInput(bid.sizes);
-
-    //combine string into proper querystring
-    var parsedSizesLength = parsedSizes.length;
-    if (parsedSizesLength > 0) {
-      //first value should be "size"
-      sizeQueryString = 'size_id=' + sizeMap[parsedSizes[0]];
-      if (parsedSizesLength > 1) {
-        //any subsequent values should be "alt_size_ids"
-        sizeQueryString += '&alt_size_ids=';
-        for (var j = 1; j < parsedSizesLength; j++) {
-          sizeQueryString += sizeMap[parsedSizes[j]] + ',';
-        }
-
-        //remove trailing comma
-        if (sizeQueryString && sizeQueryString.charAt(sizeQueryString.length - 1) === ',') {
-          sizeQueryString = sizeQueryString.slice(0, sizeQueryString.length - 1);
-        }
-      }
-    }
-
-    if (sizeQueryString) {
-      optimizedCall += sizeQueryString + '&';
-    }
-
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'p_pos', position);
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rp_floor', '0.01');
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'tk_flint', 'pbjs.rapid');
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'p_screen_res', window.screen.width +'x'+ window.screen.height);
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'kw', keyword);
-
-    if (visitor && typeof visitor === 'object') {
-      for (var vkey in visitor) {
-        if (visitor.hasOwnProperty(vkey)) {
-          if (visitor[vkey] && (typeof visitor[vkey] === 'string' || typeof visitor[vkey] === 'number' || typeof visitor[vkey] === 'boolean')) {
-            optimizedCall = utils.tryAppendQueryString(optimizedCall, 'tg_v.'+vkey, visitor[vkey]);
-          }
-        }
-      }
-    }
-
-    if (inventory && typeof inventory === 'object') {
-      for (var ikey in inventory) {
-        if (inventory.hasOwnProperty(ikey)) {
-          if (inventory[ikey] && (typeof inventory[ikey] === 'string' || typeof inventory[ikey] === 'number' || typeof inventory[ikey] === 'boolean')) {
-            optimizedCall = utils.tryAppendQueryString(optimizedCall, 'tg_v.'+ikey, inventory[ikey]);
-          }
-        }
-      }
-    }
-
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rand', Math.random());
-    optimizedCall = utils.tryAppendQueryString(optimizedCall, 'rf', pageUrl === '' ? utils.getTopWindowUrl() : pageUrl);
-
-    //remove the trailing "&"
-    if (optimizedCall.lastIndexOf('&') === optimizedCall.length - 1) {
-      optimizedCall = optimizedCall.substring(0, optimizedCall.length - 1);
-    }
-
-    // @if NODE_ENV='debug'
-    utils.logMessage('optimized request built: ' + optimizedCall);
-
-    // @endif
-
-    //append a timer here to track latency
     bid.startTime = new Date().getTime();
 
-    return optimizedCall;
+    var {
+      accountId,
+      siteId,
+      zoneId,
+      position,
+      keywords,
+      visitor,
+      inventory,
+      referrer: pageUrl
+    } = bid.params;
 
+    // defaults
+    position = position || 'btf';
+
+    var parsedSizes = utils.parseSizesInput(bid.sizes);
+
+    // using array to honor ordering. if order isn't important (it shouldn't be), an object would probably be preferable
+    var queryString = [
+      'account_id', accountId,
+      'site_id', siteId,
+      'zone_id', zoneId,
+      'size_id', sizeMap[parsedSizes[0]],
+      'alt_size_ids', parsedSizes.slice(1).map(size => sizeMap[size]).join(","),
+      'p_pos', position,
+      'rp_floor', '0.01',
+      'tk_flint', 'pbjs.rapid',
+      'p_screen_res', window.screen.width +'x'+ window.screen.height,
+      'kw', keywords
+    ];
+
+    if(visitor !== null && typeof visitor === "object") {
+      utils._each(visitor, (item, key) => queryString.push(`tg_v.${key}`, item));
+    }
+
+    if(inventory !== null && typeof inventory === 'object') {
+      utils._each(inventory, (item, key) => queryString.push(`tg_i.${key}`, item));
+    }
+
+    queryString.push(
+      'rand', Math.random(),
+      'rf', !pageUrl ? utils.getTopWindowUrl() : pageUrl
+    );
+
+    return queryString.reduce(
+      (memo, curr, index) =>
+        index % 2 === 0 && queryString[index + 1] !== undefined ?
+        memo + curr + '=' + encodeURIComponent(queryString[index + 1]) + '&' : memo,
+      '//optimized-by.rubiconproject.com/a/api/fastlane.json?' // use protocol relative link for http or https
+    ).slice(0, -1); // remove trailing &
   }
 
   function _renderCreative(script) {
@@ -198,76 +130,54 @@ apiRubiconAdapter = function RubiconAdapter() {
   }
 
   //expose the callback to the global object:
-  function handleRpCB(optimizedResponseObj, callbackId) {
+  function handleRpCB(optimizedResponseObj, bidRequest) {
+    optimizedResponseObj = JSON.parse(optimizedResponseObj); // can throw
 
-    var bidCode;
-    optimizedResponseObj = JSON.parse(optimizedResponseObj);
-
-    if (optimizedResponseObj && optimizedResponseObj.status === 'ok') {
-      var id = callbackId;
-      var placementCode = '';
-      var bidObj = getBidRequest(id);
-      var optimizedAdObj = optimizedResponseObj.ads[0];
-
-      if (bidObj) {
-        bidCode = bidObj.bidder;
-        placementCode = bidObj.placementCode;
-
-        //set the status
-        bidObj.status = CONSTANTS.STATUS.GOOD;
-      }
-
-      if (optimizedAdObj.status === 'ok') {
-        var responseCPM;
-
-        // @if NODE_ENV='debug'
-        utils.logMessage('XHR callback function called for ad ID: ' + id);
-
-        // @endif
-        var bid = [];
-        if (optimizedAdObj.cpm && optimizedAdObj.cpm !== 0) {
-          responseCPM = optimizedAdObj.cpm;
-
-          //store bid response
-          //bid status is good (indicating 1)
-          var adId = optimizedAdObj.ad_id;
-          bid = bidfactory.createBid(1);
-          bid.creative_id = adId;
-          bid.bidderCode = bidCode;
-          bid.cpm = responseCPM;
-          bid.ad = _renderCreative(optimizedAdObj.script);
-          bid.width = sizeMap[optimizedAdObj.size_id].split('x')[0];
-          bid.height = sizeMap[optimizedAdObj.size_id].split('x')[1];
-          bid.dealId = optimizedResponseObj.deal;
-
-          bidmanager.addBidResponse(placementCode, bid);
-
-        } else {
-          //no response data
-          // @if NODE_ENV='debug'
-          utils.logMessage('No prebid response from apiRubicon for placement code ' + placementCode);
-
-          // @endif
-          //indicate that there is no bid for this placement
-          bid = bidfactory.createBid(2);
-          bid.bidderCode = bidCode;
-          bidmanager.addBidResponse(placementCode, bid);
-        }
-
-      } else {
-        //no response data
-        // @if NODE_ENV='debug'
-        utils.logMessage('No prebid response for placement ' + placementCode);
-
-        // @endif
-
-      }
+    if(
+      typeof optimizedResponseObj !== 'object' ||
+      optimizedResponseObj.status !== 'ok' ||
+      !Array.isArray(optimizedResponseObj.ads)
+    ) {
+      throw "bad response";
     }
+
+    var ads = optimizedResponseObj.ads;
+
+    // if there are multiple ads, sort by CPM
+    ads = ads.sort(_adCpmSort);
+
+    ads.forEach(function (ad) {
+      if(ad.status !== 'ok') {
+        throw "bad ad status";
+      }
+      if (!ad.cpm || ad.cpm === 0) {
+        throw "bad CPM";
+      }
+
+      //set the status
+      bidRequest.status = CONSTANTS.STATUS.GOOD;
+
+      //store bid response
+      //bid status is good (indicating 1)
+      var bid = bidfactory.createBid(1, bidRequest);
+      bid.creative_id = ad.ad_id;
+      bid.bidderCode = bidRequest.bidder;
+      bid.cpm = ad.cpm;
+      bid.ad = _renderCreative(ad.script);
+      [bid.width, bid.height] = sizeMap[ad.size_id].split('x');
+      bid.dealId = optimizedResponseObj.deal;
+
+      bidmanager.addBidResponse(bidRequest.placementCode, bid);
+    });
+  }
+
+  function _adCpmSort(adA, adB) {
+    return (adB.cpm || 0.0) - (adA.cpm || 0.0);
   }
 
   return {
     callBids: _callBids
   };
-};
+}
 
-module.exports = apiRubiconAdapter;
+module.exports = RubiconAdapter;
