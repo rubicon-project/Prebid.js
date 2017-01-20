@@ -52,7 +52,7 @@ function RubiconAdapter() {
       try {
         // Video endpoint only accepts POST calls
         if (bid.mediaType === 'video') {
-          ajax(videoFastlaneURL, bidCallback, buildVideoRequestPayload(bid), {withCredentials: true});
+          ajax(videoFastlaneURL, bidCallback, buildVideoRequestPayload(bid,bidderRequest), {withCredentials: true});
         } else {
           ajax(buildOptimizedCall(bid), bidCallback, undefined, {withCredentials: true});
         }
@@ -83,24 +83,25 @@ function RubiconAdapter() {
     });
   }
 
-  function buildVideoRequestPayload(bid) {
+  function buildVideoRequestPayload(bid,bidderRequest) {
     bid.startTime = new Date().getTime();
 
-    let oParams = bid.params;
+    let oParams = bid.params,
+        TIMEOUT_BUFFER = 500;
 
-    if(!oParams || typeof oParams.inventory !== "object") {
-      console.log("Invalid Video Bid - params not correctly defined");
+    if(!oParams || typeof oParams.video !== "object") {
       throw "Invalid Video Bid";
     }
 
     let postData =  {
-      page_url: utils.getTopWindowUrl(),
+      page_url: !oParams.pageUrl ? utils.getTopWindowUrl() : oParams.pageUrl,
       resolution:  window.screen.width +'x'+ window.screen.height,
       account_id: oParams.accountId,
       integration: 'pbjs.lite',
-      timeout: 1000,
+      timeout: bidderRequest.timeout - (Date.now() - bidderRequest.auctionStart - TIMEOUT_BUFFER),
       stash_creatives: true,
-      slots: [],
+      ae_pass_through_parameters: oParams.video.aeParams,
+      slots: []
     };
 
     // Define the slot object
@@ -109,26 +110,17 @@ function RubiconAdapter() {
       zone_id: oParams.zoneId,
       position: oParams.position || 'btf',
       floor: 0.01,
-      element_id: oParams.elemId,
-      name: oParams.name
+      element_id: bid.placementCode,
+      name: oParams.name,
+      language: oParams.video.language,
+      height: oParams.video.playerHeight,
+      width: oParams.video.playerWidth
     };
-
-    // make sure the custom video object is defined correctly
-    if(oParams.video && typeof oParams.video === "object") {
-      slotData.language = oParams.video.language;
-      slotData.height = oParams.video.playerHeight;
-      slotData.width = oParams.video.playerWidth;
-      postData.ae_pass_through_parameters = oParams.video.aeParams;
-    } else {
-      console.log("Invalid Video Bid - video object");
-      throw "Invalid Video Bid!";
-    }
 
     // check and add inventory, keywords, visitor and size_id data
     if(Array.isArray(oParams.sizes) && oParams.sizes.length > 0) {
       slotData.size_id = oParams.sizes[0];
     } else {
-      console.log("Invalid Video Size");
       throw "Invalid Video Bid - Invalid Size!";
     }
 
@@ -224,10 +216,8 @@ function RubiconAdapter() {
 
   function handleRpCB(responseText, bidRequest) {
     let responseObj = JSON.parse(responseText); // can throw
-    var ads = responseObj.ads;
-
-    console.log('bid request', bidRequest);
-    console.log('response', responseObj);
+    var ads = responseObj.ads,
+        adResponseKey = bidRequest.placementCode;
 
     // check overall response
     if(typeof responseObj !== 'object' || responseObj.status !== 'ok') {
@@ -237,7 +227,7 @@ function RubiconAdapter() {
     // video ads array is wrapped in an object
     if (bidRequest.mediaType === 'video') {
       if(typeof ads === 'object') {
-        ads = ads[Object.keys(ads)[0]];
+        ads = ads[adResponseKey];
       }
     }
 
@@ -260,17 +250,17 @@ function RubiconAdapter() {
       bid.creative_id = ad.ad_id;
       bid.bidderCode = bidRequest.bidder;
       bid.cpm = ad.cpm || 0;
+      bid.dealId = ad.deal;
       if (bidRequest.mediaType === 'video') {
         bid.width = bidRequest.params.video.playerWidth;
         bid.height = bidRequest.params.video.playerHeight;
         bid.vastUrl = ad.creative_depot_url;
         bid.impression_id = ad.impression_id;
-        bid.dealId = ad.deal;
       } else {
         bid.ad = _renderCreative(ad.script, ad.impression_id);
         [bid.width, bid.height] = sizeMap[ad.size_id].split('x').map(num => Number(num));
-        bid.dealId = ad.deal;
       }
+
 
       try {
         bidmanager.addBidResponse(bidRequest.placementCode, bid);
