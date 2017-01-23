@@ -142,8 +142,8 @@ function RubiconAdapter() {
     };
 
     // check and add inventory, keywords, visitor and size_id data
-    if(params.video.size_id) {
-      slotData.size_id = params.video.size_id;
+    if (Array.isArray(params.sizes) && params.sizes.length === 1) {
+      slotData.size_id = params.sizes[0];
     } else {
       throw "Invalid Video Bid - Invalid Ad Type!";
     }

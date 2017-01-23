@@ -16,13 +16,13 @@ describe('the rubicon adapter', () => {
   function createVideoBidderRequest() {
     let bid = bidderRequest.bids[0];
     bid.mediaType = 'video';
+    bid.params.sizes = [201];
     bid.params.video = {
       'language': 'en',
       'p_aso.video.ext.skip': true,
       'p_aso.video.ext.skipdelay': 15,
       'playerHeight': 320,
       'playerWidth': 640,
-      'size_id': 201,
       'aeParams': {
         'p_aso.video.ext.skip': '1',
         'p_aso.video.ext.skipdelay': '15'
@@ -112,7 +112,7 @@ describe('the rubicon adapter', () => {
       sandbox.stub(rubiconAdapter, 'callBids');
 
       adapterManager.callBids({
-          adUnits: [clone(adUnit)]
+        adUnits: [clone(adUnit)]
       });
 
       let bidderRequest = rubiconAdapter.callBids.getCall(0).args[0];
@@ -170,7 +170,7 @@ describe('the rubicon adapter', () => {
 
       ordering = masSizeOrdering([[120, 600], [320, 50], [160,600], [640, 480],[336, 280], [200, 600], [728, 90]]);
       expect(ordering).to.deep.equal([2, 9, 8, 16, 43, 65, 126]);
-    })
+    });
 
   });
 
@@ -344,7 +344,7 @@ describe('the rubicon adapter', () => {
           expect(slot.visitor).to.have.property('ucat').that.equals('new');
           expect(slot.visitor).to.have.property('lastsearch').that.equals('iphone');
 
-        })
+        });
 
       });
 
