@@ -647,3 +647,11 @@ export function replaceAuctionPrice(str, cpm) {
   if(!str) return;
   return str.replace(/\$\{AUCTION_PRICE\}/g, cpm);
 }
+
+export function roundFloat(num, dec) {
+  var d = 1;
+  for (var i = 0; i < dec; i++) {
+    d += "0";
+  }
+  return Math.round(num * d) / d;
+}
