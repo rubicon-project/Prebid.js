@@ -253,7 +253,7 @@ function PrebidServer() {
             });
         });
       }
-      if (result.status === 'no_cookie' && config.cookieSet) {
+      if (result.status === 'no_cookie' && config.cookieSet && config.cookieSetUrl) {
         // cookie sync
         cookieSet(config.cookieSetUrl);
       }
