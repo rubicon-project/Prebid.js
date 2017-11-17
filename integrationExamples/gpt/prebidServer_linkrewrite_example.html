@@ -51,7 +51,6 @@
       pbjs.que = pbjs.que || [];
 
     </script>
-    <!--<script type="text/javascript" src="http://ads.rubiconproject.com/prebid/1001.js" async></script>-->
     <script type="text/javascript" src="../../build/dev/prebid.js" async></script>
 
     <script>
@@ -80,17 +79,16 @@
           // endpoint, in milliseconds. Default value is 1000.
           timeout: 1000,
 
-          syncEndpoint: 'https://prebid-server.rubiconproject.com/cookie_sync',
+          syncEndpoint: 'https://my-prebid-server.myhost/cookie_sync',
 
           // String (optional): Adapter code for S2S. Defaults to 'prebidServer'.
           adapter: 'prebidServer',
 
           // String (optional): Will override the default endpoint for Prebid Server.
-          endpoint: 'https://pbs-qa.aws.rubiconproject.com/auction?url_override=rubiconproject.com&debug=1',
+          endpoint: 'https://my-prebid-server.myhost/auction',
 
           // String (optional): Will override the default cookieSet endpoint for Prebid Server.
-          /*cookieSetUrl : 'https://assets.rubiconproject.com/utils/cookieset/cs.js'*/
-          cookieSetUrl : 'cs.js'
+          cookieSetUrl : 'https://my-prebid-server.myhost/cookieset/cs.js'
         }});
 
         pbjs.addAdUnits(adUnits);
@@ -162,4 +160,3 @@
 </div>
 </body>
 </html>
-
