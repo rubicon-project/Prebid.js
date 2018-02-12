@@ -299,10 +299,10 @@ export const spec = {
 
   /**
    * @param {*} responseObj
-   * @param {BidRequest} bidRequest
+   * @param {Object} bidRequests
    * @return {Bid[]} An array of bids which
    */
-  interpretResponse: function(responseObj, {bidRequest}) {
+  interpretResponse: function(responseObj, bidRequests) {
     responseObj = responseObj.body;
     // console.log('responseObj %O  bidRequest %O', responseObj, bidRequest);
     let ads = responseObj.ads;
@@ -312,19 +312,18 @@ export const spec = {
       return [];
     }
 
-    // video ads array is wrapped in an object
-    if (typeof bidRequest === 'object' && bidRequest.mediaType === 'video' && typeof ads === 'object') {
-      ads = ads[bidRequest.adUnitCode];
+    if (!Array.isArray(bidRequests)) {
+      const bidRequest = bidRequests;
+      // video ads array is wrapped in an object
+      if (typeof bidRequest === 'object' && bidRequest.mediaType === 'video' && typeof ads === 'object') {
+        ads = ads[bidRequest.adUnitCode];
+      }
     }
 
     // check the ad response
     if (!Array.isArray(ads) || ads.length < 1) {
       return [];
     }
-
-    // if there are multiple ads, sort by CPM
-    // commented out for singleRequest function signature modifications
-    // ads = ads.sort(_adCpmSort);
 
     return ads.reduce((bids, ad) => {
       if (ad.status !== 'ok') {
