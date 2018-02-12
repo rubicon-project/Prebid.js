@@ -328,7 +328,7 @@ export const spec = {
       }
 
       let bid = {
-        requestId: bidRequest.bidId,
+        requestId: bidRequests.bidRequest.bidId,
         currency: 'USD',
         creativeId: ad.creative_id,
         mediaType: ad.creative_type,
@@ -337,9 +337,10 @@ export const spec = {
         ttl: 300, // 5 minutes
         netRevenue: config.getConfig('rubicon.netRevenue') || false
       };
-      if (bidRequest.mediaType === 'video') {
-        bid.width = bidRequest.params.video.playerWidth;
-        bid.height = bidRequest.params.video.playerHeight;
+
+      if (bidRequests.bidRequest.mediaType === 'video') {
+        bid.width = bidRequests.bidRequest.params.video.playerWidth;
+        bid.height = bidRequests.bidRequest.params.video.playerHeight;
         bid.vastUrl = ad.creative_depot_url;
         bid.impression_id = ad.impression_id;
         bid.videoCacheKey = ad.impression_id;
@@ -353,7 +354,7 @@ export const spec = {
         .reduce((memo, item) => {
           memo[item.key] = item.values[0];
           return memo;
-        }, {'rpfl_elemid': bidRequest.adUnitCode});
+        }, {'rpfl_elemid': bidRequests.bidRequest.adUnitCode});
 
       bids.push(bid);
 
