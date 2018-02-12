@@ -312,12 +312,9 @@ export const spec = {
       return [];
     }
 
-    if (!Array.isArray(bidRequests)) {
-      const bidRequest = bidRequests;
-      // video ads array is wrapped in an object
-      if (typeof bidRequest === 'object' && bidRequest.mediaType === 'video' && typeof ads === 'object') {
-        ads = ads[bidRequest.adUnitCode];
-      }
+    // video ads array is wrapped in an object
+    if (typeof bidRequests.bidRequest === 'object' && bidRequests.bidRequest.mediaType === 'video' && typeof ads === 'object') {
+      ads = ads[bidRequests.bidRequest.adUnitCode];
     }
 
     // check the ad response
