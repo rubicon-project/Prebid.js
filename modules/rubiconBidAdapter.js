@@ -415,6 +415,10 @@ function mapSizes(sizes) {
     }, []);
 }
 
+/**
+ * @param {Object[]} bids
+ * @returns {Object} - Object array values for siteId keys
+ */
 function groupBidRequestsBySiteId(bids) {
   return bids.reduce((aggregate, bid) => {
     if (!aggregate.hasOwnProperty(bid.params.siteId)) {
