@@ -101,107 +101,101 @@ export const spec = {
     return true;
   },
 
-  createVideoBid: function(bidRequest, bidderRequest) {
-    bidRequest.startTime = new Date().getTime();
-    let params = bidRequest.params;
-    let size = parseSizes(bidRequest);
-    let page_rf = !params.referrer ? utils.getTopWindowUrl() : params.referrer;
-
-    let data = {
-      page_url: params.secure ? page_rf.replace(/^http:/i, 'https:') : page_rf,
-      resolution: _getScreenResolution(),
-      account_id: params.accountId,
-      integration: INTEGRATION,
-      'x_source.tid': bidRequest.transactionId,
-      timeout: bidderRequest.timeout - (Date.now() - bidderRequest.auctionStart + TIMEOUT_BUFFER),
-      stash_creatives: true,
-      ae_pass_through_parameters: params.video.aeParams,
-      slots: []
-    };
-
-    // Define the slot object
-    let slotData = {
-      site_id: params.siteId,
-      zone_id: params.zoneId,
-      position: params.position || 'btf',
-      floor: parseFloat(params.floor) > 0.01 ? params.floor : 0.01,
-      element_id: bidRequest.adUnitCode,
-      name: bidRequest.adUnitCode,
-      language: params.video.language,
-      width: size[0],
-      height: size[1],
-      size_id: params.video.size_id
-    };
-
-    if (params.inventory && typeof params.inventory === 'object') {
-      slotData.inventory = params.inventory;
-    }
-
-    if (params.keywords && Array.isArray(params.keywords)) {
-      slotData.keywords = params.keywords;
-    }
-
-    if (params.visitor && typeof params.visitor === 'object') {
-      slotData.visitor = params.visitor;
-    }
-
-    data.slots.push(slotData);
-
-    return {
-      method: 'POST',
-      url: VIDEO_ENDPOINT,
-      data,
-      bidRequest
-    }
-  },
-
   /**
    * @param {BidRequest[]} bidRequests
    * @param bidderRequest
    * @return ServerRequest[]
    */
   buildRequests: function(bidRequests, bidderRequest) {
+    // separate video bids because the requests are structured differently
+    const requests = bidRequests.filter(bidRequest => bidRequest.mediaType === 'video').map(bidRequest => {
+      bidRequest.startTime = new Date().getTime();
+      let params = bidRequest.params;
+      let size = parseSizes(bidRequest);
+      let page_rf = !params.referrer ? utils.getTopWindowUrl() : params.referrer;
 
-    const videoBidRequests = bidRequests.filter(bidRequest => bidRequest.mediaType === 'video').map(bidRequest => {
-      return spec.createVideoBid(bidRequest, bidderRequest);
+      let data = {
+        page_url: params.secure ? page_rf.replace(/^http:/i, 'https:') : page_rf,
+        resolution: _getScreenResolution(),
+        account_id: params.accountId,
+        integration: INTEGRATION,
+        'x_source.tid': bidRequest.transactionId,
+        timeout: bidderRequest.timeout - (Date.now() - bidderRequest.auctionStart + TIMEOUT_BUFFER),
+        stash_creatives: true,
+        ae_pass_through_parameters: params.video.aeParams,
+        slots: []
+      };
+
+      // Define the slot object
+      let slotData = {
+        site_id: params.siteId,
+        zone_id: params.zoneId,
+        position: params.position || 'btf',
+        floor: parseFloat(params.floor) > 0.01 ? params.floor : 0.01,
+        element_id: bidRequest.adUnitCode,
+        name: bidRequest.adUnitCode,
+        language: params.video.language,
+        width: size[0],
+        height: size[1],
+        size_id: params.video.size_id
+      };
+
+      if (params.inventory && typeof params.inventory === 'object') {
+        slotData.inventory = params.inventory;
+      }
+
+      if (params.keywords && Array.isArray(params.keywords)) {
+        slotData.keywords = params.keywords;
+      }
+
+      if (params.visitor && typeof params.visitor === 'object') {
+        slotData.visitor = params.visitor;
+      }
+
+      data.slots.push(slotData);
+
+      return {
+        method: 'POST',
+        url: VIDEO_ENDPOINT,
+        data,
+        bidRequest
+      }
     });
 
-    const nonVideoBidRequests = bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video');
-
-    let bidRequestGroups = [];
-
-    // bids are not grouped if single request mode is not enabled
     if (config.getConfig('rubicon.singleRequest') !== true) {
-      bidRequestGroups = nonVideoBidRequests.map(bidRequest => {
+      // bids are not grouped if single request mode is not enabled
+      requests.concat(bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video').map(bidRequest => {
         const bidParams = spec.createSlotParams(bidRequest, bidderRequest);
         const combinedSlotParams = spec.combineSlotUrlParams([bidParams]);
 
         return {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
-          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${combinedSlotParams[key]}&`, '?')
-          + `slots=1&rand=${Math.random()}`, bidRequest
+          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&`, '?')
+          + `slots=1&rand=${Math.random()}`,
+          bidRequest
         };
-      });
+      }));
     }
     else {
       // single request requires bids to be grouped by site id into a single request
-      let groupedBids = groupBidRequestsBySiteId(bidRequests);
-      bidRequestGroups = Object.keys(groupedBids).map(bidGroupKey => {
+      const groupedBids = groupBidRequestsBySiteId(bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video'));
+
+      requests.concat(Object.keys(groupedBids).map(bidGroupKey => {
         const bidsInGroup = groupedBids[bidGroupKey];
         const combinedSlotParams = spec.combineSlotUrlParams(spec.createSlotParams(bidsInGroup));
 
         return {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
-          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${combinedSlotParams[key]}&`, '?')
+          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&`, '?')
           + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
-          bidRequests
+          bidRequest: groupedBids[bidGroupKey],
         };
-      });
+      }));
     }
 
-    return bidRequestGroups.concat(videoBidRequests);
+    return requests;
   },
 
   /**
@@ -255,15 +249,17 @@ export const spec = {
       'size_id': parsedSizes[0],
       'alt_size_ids': parsedSizes.slice(1).join(',') || undefined,
       'p_pos': bidRequest.params.position || 'btf',
-      'rp_floor': (parseFloat(bidRequest.params.floor)) > 0.01 ? parseFloat(bidRequest.params.floor) : 0.01,
-      'rp_secure': '1',
-      'tk_flint': 'pbjs_lite_v',
+      'rp_floor': (parseFloat(bidRequest.params.floor) > 0.01) ? parseFloat(bidRequest.params.floor) : 0.01,
+      'rp_secure': isSecure() ? '1' : '0',
+      'tk_flint': INTEGRATION,
       'x_source.tid': bidRequest.transactionId,
-      'p_screen_res': `${window.screen.width}x${window.screen.height}`,
-      'kw': bidRequest.params.keywords.join(','),
+      'p_screen_res': _getScreenResolution(),
+      'kw': Array.isArray(bidRequest.params.keywords) ? bidRequest.params.keywords.join(',') : '',
       'tk_user_key': bidRequest.params.userId,
       'rf': !pageUrl ? utils.getTopWindowUrl() : pageUrl
     };
+
+    // visitor properties
     const visitor = bidRequest.params.visitor;
     if (visitor !== null && typeof visitor === 'object') {
       Object.keys(visitor).forEach((key) => {
@@ -271,6 +267,7 @@ export const spec = {
       });
     }
 
+    // inventory properties
     const inventory = bidRequest.params.inventory;
     if (inventory !== null && typeof inventory === 'object') {
       Object.keys(inventory).forEach((key) => {
@@ -278,25 +275,27 @@ export const spec = {
       });
     }
 
+    // digitrust properties
     const digiTrustUser = window.DigiTrust && (config.getConfig('digiTrustId') || window.DigiTrust.getUser({member: 'T9QSFKPDN9'}));
     const digiTrustId = (digiTrustUser && digiTrustUser.success && digiTrustUser.identity) || null;
-    // Verify there is an ID and this user has not opted out
+    // verify there is an ID and this user has not opted out
     if (digiTrustId && (digiTrustId.privacy && digiTrustId.privacy.optout !== true)) {
       data['dt.id'] = digiTrustId.id;
       data['dt.keyv'] = digiTrustId.keyv;
       data['dt.pref'] = 0;
     }
+
     return data;
   },
 
   /**
    * @param {*} responseObj
-   * @param {Object} bidRequests
+   * @param {BidRequest|BidRequest[]} bidRequest - bidRequest an array if singleRequest mode active, otherwise will be a plain object
    * @return {Bid[]} An array of bids which
    */
-  interpretResponse: function(responseObj, bidRequests) {
+  interpretResponse: function(responseObj, {bidRequest}) {
     responseObj = responseObj.body;
-    // console.log('responseObj %O  bidRequest %O', responseObj, bidRequest);
+
     let ads = responseObj.ads;
 
     // check overall response
@@ -305,8 +304,8 @@ export const spec = {
     }
 
     // video ads array is wrapped in an object
-    if (typeof bidRequests.bidRequest === 'object' && bidRequests.bidRequest.mediaType === 'video' && typeof ads === 'object') {
-      ads = ads[bidRequests.bidRequest.adUnitCode];
+    if (typeof bidRequest === 'object' && !Array.isArray(bidRequest) && bidRequest.mediaType === 'video' && typeof ads === 'object') {
+      ads = ads[bidRequest.adUnitCode];
     }
 
     // check the ad response
@@ -314,41 +313,46 @@ export const spec = {
       return [];
     }
 
-    return ads.reduce((bids, ad) => {
+    return ads.reduce((bids, ad, i) => {
       if (ad.status !== 'ok') {
         return [];
       }
 
-      const bid = {
-        requestId: bidRequests.bidRequest.bidId,
-        currency: 'USD',
-        creativeId: ad.creative_id,
-        mediaType: ad.creative_type,
-        cpm: ad.cpm || 0,
-        dealId: ad.deal,
-        ttl: 300, // 5 minutes
-        netRevenue: config.getConfig('rubicon.netRevenue') || false
-      };
+      // associate bidRequest by assuming that ads order is the same as the bid request order
+      const associatedBidRequest = Array.isArray(bidRequest) ? bidRequest[i]: bidRequest;
 
-      if (bidRequests.bidRequest.mediaType === 'video') {
-        bid.width = bidRequests.bidRequest.params.video.playerWidth;
-        bid.height = bidRequests.bidRequest.params.video.playerHeight;
-        bid.vastUrl = ad.creative_depot_url;
-        bid.impression_id = ad.impression_id;
-        bid.videoCacheKey = ad.impression_id;
-      } else {
-        bid.ad = _renderCreative(ad.script, ad.impression_id);
-        [bid.width, bid.height] = sizeMap[ad.size_id].split('x').map(num => Number(num));
+      if (typeof associatedBidRequest !== 'undefined') {
+        let bid = {
+          requestId: associatedBidRequest.bidId,
+          currency: 'USD',
+          creativeId: ad.creative_id,
+          mediaType: ad.creative_type,
+          cpm: ad.cpm || 0,
+          dealId: ad.deal,
+          ttl: 300, // 5 minutes
+          netRevenue: config.getConfig('rubicon.netRevenue') || false
+        };
+
+        if (associatedBidRequest.mediaType === 'video') {
+          bid.width = associatedBidRequest.params.video.playerWidth;
+          bid.height = associatedBidRequest.params.video.playerHeight;
+          bid.vastUrl = ad.creative_depot_url;
+          bid.impression_id = ad.impression_id;
+          bid.videoCacheKey = ad.impression_id;
+        } else {
+          bid.ad = _renderCreative(ad.script, ad.impression_id);
+          [bid.width, bid.height] = sizeMap[ad.size_id].split('x').map(num => Number(num));
+        }
+
+        // add server-side targeting
+        bid.rubiconTargeting = (Array.isArray(ad.targeting) ? ad.targeting : [])
+          .reduce((memo, item) => {
+            memo[item.key] = item.values[0];
+            return memo;
+          }, {'rpfl_elemid': associatedBidRequest.adUnitCode});
+
+        bids.push(bid);
       }
-
-      // add server-side targeting
-      bid.rubiconTargeting = (Array.isArray(ad.targeting) ? ad.targeting : [])
-        .reduce((memo, item) => {
-          memo[item.key] = item.values[0];
-          return memo;
-        }, {'rpfl_elemid': bidRequests.bidRequest.adUnitCode});
-
-      bids.push(bid);
 
       return bids;
     }, []);
