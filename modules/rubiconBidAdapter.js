@@ -416,7 +416,7 @@ function mapSizes(sizes) {
 }
 
 function groupBidRequestsBySiteId(bids) {
-  return bids.reduce((aggregate, bid, index, array) => {
+  return bids.reduce((aggregate, bid) => {
     if (!aggregate.hasOwnProperty(bid.params.siteId)) {
       aggregate[bid.params.siteId] = [];
     }
