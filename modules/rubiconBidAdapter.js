@@ -322,7 +322,7 @@ export const spec = {
         return [];
       }
 
-      // associate bidRequest by assuming that ads order is the same as the bid request order
+      // associate bidRequests under the assumption that response ads order matches request bids order
       const associatedBidRequest = Array.isArray(bidRequest) ? bidRequest[i]: bidRequest;
 
       if (typeof associatedBidRequest !== 'undefined') {
