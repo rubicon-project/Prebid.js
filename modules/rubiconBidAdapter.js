@@ -280,14 +280,10 @@ export const spec = {
     }
 
     // digitrust properties
-    const digiTrustUser = window.DigiTrust && (config.getConfig('digiTrustId') || window.DigiTrust.getUser({member: 'T9QSFKPDN9'}));
-    const digiTrustId = (digiTrustUser && digiTrustUser.success && digiTrustUser.identity) || null;
-    // verify there is an ID and this user has not opted out
-    if (digiTrustId && (digiTrustId.privacy && digiTrustId.privacy.optout !== true)) {
-      data['dt.id'] = digiTrustId.id;
-      data['dt.keyv'] = digiTrustId.keyv;
-      data['dt.pref'] = 0;
-    }
+    const digitrustParams = _getDigiTrustQueryParams();
+    Object.keys(digitrustParams).forEach(paramKey => {
+      data[paramKey] = digitrustParams[paramKey];
+    });
 
     return data;
   },
@@ -333,7 +329,11 @@ export const spec = {
           cpm: ad.cpm || 0,
           dealId: ad.deal,
           ttl: 300, // 5 minutes
-          netRevenue: config.getConfig('rubicon.netRevenue') || false
+          netRevenue: config.getConfig('rubicon.netRevenue') || false,
+          rubicon: {
+            advertiserId: ad.advertiser,
+            networkId: ad.network
+          }
         };
 
         if (associatedBidRequest.mediaType === 'video') {
@@ -373,6 +373,23 @@ export const spec = {
 
 function _getScreenResolution() {
   return [window.screen.width, window.screen.height].join('x');
+}
+
+function _getDigiTrustQueryParams() {
+  function getDigiTrustId() {
+    let digiTrustUser = window.DigiTrust && (config.getConfig('digiTrustId') || window.DigiTrust.getUser({member: 'T9QSFKPDN9'}));
+    return (digiTrustUser && digiTrustUser.success && digiTrustUser.identity) || null;
+  }
+  let digiTrustId = getDigiTrustId();
+  // Verify there is an ID and this user has not opted out
+  if (!digiTrustId || (digiTrustId.privacy && digiTrustId.privacy.optout)) {
+    return [];
+  }
+  return [
+    'dt.id', digiTrustId.id,
+    'dt.keyv', digiTrustId.keyv,
+    'dt.pref', 0
+  ];
 }
 
 function _renderCreative(script, impId) {
