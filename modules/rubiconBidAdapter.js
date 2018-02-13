@@ -100,139 +100,201 @@ export const spec = {
     }
     return true;
   },
+
   /**
    * @param {BidRequest[]} bidRequests
    * @param bidderRequest
    * @return ServerRequest[]
    */
   buildRequests: function(bidRequests, bidderRequest) {
-    return bidRequests.map(bidRequest => {
+    // separate video bids because the requests are structured differently
+    const requests = bidRequests.filter(bidRequest => bidRequest.mediaType === 'video').map(bidRequest => {
       bidRequest.startTime = new Date().getTime();
+      let params = bidRequest.params;
+      let size = parseSizes(bidRequest);
+      let page_rf = !params.referrer ? utils.getTopWindowUrl() : params.referrer;
 
-      if (bidRequest.mediaType === 'video') {
-        let params = bidRequest.params;
-        let size = parseSizes(bidRequest);
-        let page_rf = !params.referrer ? utils.getTopWindowUrl() : params.referrer;
+      let data = {
+        page_url: params.secure ? page_rf.replace(/^http:/i, 'https:') : page_rf,
+        resolution: _getScreenResolution(),
+        account_id: params.accountId,
+        integration: INTEGRATION,
+        'x_source.tid': bidRequest.transactionId,
+        timeout: bidderRequest.timeout - (Date.now() - bidderRequest.auctionStart + TIMEOUT_BUFFER),
+        stash_creatives: true,
+        ae_pass_through_parameters: params.video.aeParams,
+        slots: []
+      };
 
-        let data = {
-          page_url: params.secure ? page_rf.replace(/^http:/i, 'https:') : page_rf,
-          resolution: _getScreenResolution(),
-          account_id: params.accountId,
-          integration: INTEGRATION,
-          'x_source.tid': bidRequest.transactionId,
-          timeout: bidderRequest.timeout - (Date.now() - bidderRequest.auctionStart + TIMEOUT_BUFFER),
-          stash_creatives: true,
-          ae_pass_through_parameters: params.video.aeParams,
-          slots: []
-        };
+      // Define the slot object
+      let slotData = {
+        site_id: params.siteId,
+        zone_id: params.zoneId,
+        position: params.position || 'btf',
+        floor: parseFloat(params.floor) > 0.01 ? params.floor : 0.01,
+        element_id: bidRequest.adUnitCode,
+        name: bidRequest.adUnitCode,
+        language: params.video.language,
+        width: size[0],
+        height: size[1],
+        size_id: params.video.size_id
+      };
 
-        // Define the slot object
-        let slotData = {
-          site_id: params.siteId,
-          zone_id: params.zoneId,
-          position: params.position || 'btf',
-          floor: parseFloat(params.floor) > 0.01 ? params.floor : 0.01,
-          element_id: bidRequest.adUnitCode,
-          name: bidRequest.adUnitCode,
-          language: params.video.language,
-          width: size[0],
-          height: size[1],
-          size_id: params.video.size_id
-        };
-
-        if (params.inventory && typeof params.inventory === 'object') {
-          slotData.inventory = params.inventory;
-        }
-
-        if (params.keywords && Array.isArray(params.keywords)) {
-          slotData.keywords = params.keywords;
-        }
-
-        if (params.visitor && typeof params.visitor === 'object') {
-          slotData.visitor = params.visitor;
-        }
-
-        data.slots.push(slotData);
-
-        return {
-          method: 'POST',
-          url: VIDEO_ENDPOINT,
-          data,
-          bidRequest
-        }
+      if (params.inventory && typeof params.inventory === 'object') {
+        slotData.inventory = params.inventory;
       }
 
-      // non-video request builder
-      let {
-        accountId,
-        siteId,
-        zoneId,
-        position,
-        floor,
-        keywords,
-        visitor,
-        inventory,
-        userId,
-        referrer: pageUrl
-      } = bidRequest.params;
-
-      // defaults
-      floor = (floor = parseFloat(floor)) > 0.01 ? floor : 0.01;
-      position = position || 'btf';
-
-      // use rubicon sizes if provided, otherwise adUnit.sizes
-      let parsedSizes = parseSizes(bidRequest);
-
-      // using array to honor ordering. if order isn't important (it shouldn't be), an object would probably be preferable
-      let data = [
-        'account_id', accountId,
-        'site_id', siteId,
-        'zone_id', zoneId,
-        'size_id', parsedSizes[0],
-        'alt_size_ids', parsedSizes.slice(1).join(',') || undefined,
-        'p_pos', position,
-        'rp_floor', floor,
-        'rp_secure', isSecure() ? '1' : '0',
-        'tk_flint', INTEGRATION,
-        'x_source.tid', bidRequest.transactionId,
-        'p_screen_res', _getScreenResolution(),
-        'kw', keywords,
-        'tk_user_key', userId
-      ];
-
-      if (visitor !== null && typeof visitor === 'object') {
-        utils._each(visitor, (item, key) => data.push(`tg_v.${key}`, item));
+      if (params.keywords && Array.isArray(params.keywords)) {
+        slotData.keywords = params.keywords;
       }
 
-      if (inventory !== null && typeof inventory === 'object') {
-        utils._each(inventory, (item, key) => data.push(`tg_i.${key}`, item));
+      if (params.visitor && typeof params.visitor === 'object') {
+        slotData.visitor = params.visitor;
       }
 
-      data.push(
-        'rand', Math.random(),
-        'rf', !pageUrl ? utils.getTopWindowUrl() : pageUrl
-      );
-
-      data = data.concat(_getDigiTrustQueryParams());
-
-      data = data.reduce(
-        (memo, curr, index) =>
-          index % 2 === 0 && data[index + 1] !== undefined
-            ? memo + curr + '=' + encodeURIComponent(data[index + 1]) + '&' : memo,
-        ''
-      ).slice(0, -1); // remove trailing &
+      data.slots.push(slotData);
 
       return {
-        method: 'GET',
-        url: FASTLANE_ENDPOINT,
+        method: 'POST',
+        url: VIDEO_ENDPOINT,
         data,
         bidRequest
-      };
+      }
     });
+
+    if (config.getConfig('rubicon.singleRequest') !== true) {
+      // bids are not grouped if single request mode is not enabled
+      requests.concat(bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video').map(bidRequest => {
+        const bidParams = spec.createSlotParams(bidRequest, bidderRequest);
+        const combinedSlotParams = spec.combineSlotUrlParams([bidParams]);
+
+        return {
+          method: 'GET',
+          url: FASTLANE_ENDPOINT,
+          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&`, '?')
+          + `slots=1&rand=${Math.random()}`,
+          bidRequest
+        };
+      }));
+    }
+    else {
+      // single request requires bids to be grouped by site id into a single request
+      const groupedBidRequests = (bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video')).bids.reduce(function(groupedBids, bid) {
+        (groupedBids[bid.params['siteId']] = groupedBids[bid.params['siteId']] || []).push(bid);
+        return groupedBids;
+      }, {});
+
+      requests.concat(Object.keys(groupedBidRequests).map(bidGroupKey => {
+        const bidsInGroup = groupedBidRequests[bidGroupKey];
+        const combinedSlotParams = spec.combineSlotUrlParams(spec.createSlotParams(bidsInGroup));
+
+        // single request mode must return grouped bidRequests instead of single bidRequest object
+        return {
+          method: 'GET',
+          url: FASTLANE_ENDPOINT,
+          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&`, '?')
+          + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
+          bidRequest: groupedBidRequests[bidGroupKey],
+        };
+      }));
+    }
+
+    return requests;
   },
+
+  /**
+   * @summary combines param values from an array of slots into a single semicolon delineated value
+   * or just one value if they are all the same.
+   * @param {Object[]} aSlotUrlParams - example [{p1: 'foo', p2: 'test'}, {p2: 'test'}, {p1: 'bar', p2: 'test'}]
+   * @return {Object} - example {p1: 'foo;;bar', p2: 'test'}
+   */
+  combineSlotUrlParams: function(aSlotUrlParams) {
+    // if only have params for one slot, return those params
+    if (aSlotUrlParams.length === 1) {
+      return aSlotUrlParams[0];
+    }
+
+    // reduce param values from all slot objects into an array of values in a single object
+    const oCombinedSlotUrlParams = aSlotUrlParams.reduce(function(oCombinedParams, oSlotUrlParams, iIndex) {
+      Object.keys(oSlotUrlParams).forEach(function(param) {
+        if (!oCombinedParams.hasOwnProperty(param)) {
+          oCombinedParams[param] = new Array(aSlotUrlParams.length); // initialize array;
+        }
+        // insert into the proper element of the array
+        oCombinedParams[param].splice(iIndex, 1, oSlotUrlParams[param]);
+      });
+
+      return oCombinedParams;
+    }, {});
+
+    // convert arrays into semicolon delimited strings
+    const re = new RegExp('^([^;]*)(;\\1)+$'); // regex to test for duplication
+
+    Object.keys(oCombinedSlotUrlParams).forEach(function(param) {
+      const sValues = oCombinedSlotUrlParams[param].join(';');
+      // consolidate param values into one value if they are all the same
+      const match = sValues.match(re);
+      oCombinedSlotUrlParams[param] = match ? match[1] : sValues;
+    });
+
+    return oCombinedSlotUrlParams;
+  },
+
+  createSlotParams: function(bidRequest) {
+    bidRequest.startTime = new Date().getTime();
+
+    // use rubicon sizes if provided, otherwise adUnit.sizes
+    const parsedSizes = parseSizes(bidRequest);
+
+    const data = {
+      'account_id': bidRequest.params.accountId,
+      'site_id': bidRequest.params.siteId,
+      'zone_id': bidRequest.params.zoneId,
+      'size_id': parsedSizes[0],
+      'alt_size_ids': parsedSizes.slice(1).join(',') || undefined,
+      'p_pos': bidRequest.params.position || 'btf',
+      'rp_floor': (parseFloat(bidRequest.params.floor) > 0.01) ? parseFloat(bidRequest.params.floor) : 0.01,
+      'rp_secure': isSecure() ? '1' : '0',
+      'tk_flint': INTEGRATION,
+      'x_source.tid': bidRequest.transactionId,
+      'p_screen_res': _getScreenResolution(),
+      'kw': Array.isArray(bidRequest.params.keywords) ? bidRequest.params.keywords.join(',') : '',
+      'tk_user_key': bidRequest.params.userId,
+      'rf': !pageUrl ? utils.getTopWindowUrl() : pageUrl
+    };
+
+    // visitor properties
+    const visitor = bidRequest.params.visitor;
+    if (visitor !== null && typeof visitor === 'object') {
+      Object.keys(visitor).forEach((key) => {
+        data[`tg_v.${key}`] = visitor[key];
+      });
+    }
+
+    // inventory properties
+    const inventory = bidRequest.params.inventory;
+    if (inventory !== null && typeof inventory === 'object') {
+      Object.keys(inventory).forEach((key) => {
+        data[`tg_i.${key}`] = inventory[key];
+      });
+    }
+
+    // digitrust properties
+    const digiTrustUser = window.DigiTrust && (config.getConfig('digiTrustId') || window.DigiTrust.getUser({member: 'T9QSFKPDN9'}));
+    const digiTrustId = (digiTrustUser && digiTrustUser.success && digiTrustUser.identity) || null;
+    // verify there is an ID and this user has not opted out
+    if (digiTrustId && (digiTrustId.privacy && digiTrustId.privacy.optout !== true)) {
+      data['dt.id'] = digiTrustId.id;
+      data['dt.keyv'] = digiTrustId.keyv;
+      data['dt.pref'] = 0;
+    }
+
+    return data;
+  },
+
   /**
    * @param {*} responseObj
-   * @param {BidRequest} bidRequest
+   * @param {BidRequest|BidRequest[]} bidRequest - bidRequest an array if singleRequest mode active, otherwise will be a plain object
    * @return {Bid[]} An array of bids which
    */
   interpretResponse: function(responseObj, {bidRequest}) {
@@ -245,7 +307,7 @@ export const spec = {
     }
 
     // video ads array is wrapped in an object
-    if (typeof bidRequest === 'object' && bidRequest.mediaType === 'video' && typeof ads === 'object') {
+    if (typeof bidRequest === 'object' && !Array.isArray(bidRequest) && bidRequest.mediaType === 'video' && typeof ads === 'object') {
       ads = ads[bidRequest.adUnitCode];
     }
 
@@ -254,48 +316,46 @@ export const spec = {
       return [];
     }
 
-    // if there are multiple ads, sort by CPM
-    ads = ads.sort(_adCpmSort);
-
-    return ads.reduce((bids, ad) => {
+    return ads.reduce((bids, ad, i) => {
       if (ad.status !== 'ok') {
         return [];
       }
 
-      let bid = {
-        requestId: bidRequest.bidId,
-        currency: 'USD',
-        creativeId: ad.creative_id,
-        mediaType: ad.creative_type,
-        cpm: ad.cpm || 0,
-        dealId: ad.deal,
-        ttl: 300, // 5 minutes
-        netRevenue: config.getConfig('rubicon.netRevenue') || false,
-        rubicon: {
-          advertiserId: ad.advertiser,
-          networkId: ad.network
+      // associate bidRequests under the assumption that response ads order matches request bids order
+      const associatedBidRequest = Array.isArray(bidRequest) ? bidRequest[i]: bidRequest;
+
+      if (typeof associatedBidRequest !== 'undefined') {
+        let bid = {
+          requestId: associatedBidRequest.bidId,
+          currency: 'USD',
+          creativeId: ad.creative_id,
+          mediaType: ad.creative_type,
+          cpm: ad.cpm || 0,
+          dealId: ad.deal,
+          ttl: 300, // 5 minutes
+          netRevenue: config.getConfig('rubicon.netRevenue') || false
+        };
+
+        if (associatedBidRequest.mediaType === 'video') {
+          bid.width = associatedBidRequest.params.video.playerWidth;
+          bid.height = associatedBidRequest.params.video.playerHeight;
+          bid.vastUrl = ad.creative_depot_url;
+          bid.impression_id = ad.impression_id;
+          bid.videoCacheKey = ad.impression_id;
+        } else {
+          bid.ad = _renderCreative(ad.script, ad.impression_id);
+          [bid.width, bid.height] = sizeMap[ad.size_id].split('x').map(num => Number(num));
         }
-      };
 
-      if (bidRequest.mediaType === 'video') {
-        bid.width = bidRequest.params.video.playerWidth;
-        bid.height = bidRequest.params.video.playerHeight;
-        bid.vastUrl = ad.creative_depot_url;
-        bid.impression_id = ad.impression_id;
-        bid.videoCacheKey = ad.impression_id;
-      } else {
-        bid.ad = _renderCreative(ad.script, ad.impression_id);
-        [bid.width, bid.height] = sizeMap[ad.size_id].split('x').map(num => Number(num));
+        // add server-side targeting
+        bid.rubiconTargeting = (Array.isArray(ad.targeting) ? ad.targeting : [])
+          .reduce((memo, item) => {
+            memo[item.key] = item.values[0];
+            return memo;
+          }, {'rpfl_elemid': associatedBidRequest.adUnitCode});
+
+        bids.push(bid);
       }
-
-      // add server-side targeting
-      bid.rubiconTargeting = (Array.isArray(ad.targeting) ? ad.targeting : [])
-        .reduce((memo, item) => {
-          memo[item.key] = item.values[0];
-          return memo;
-        }, {'rpfl_elemid': bidRequest.adUnitCode});
-
-      bids.push(bid);
 
       return bids;
     }, []);
@@ -311,29 +371,8 @@ export const spec = {
   }
 };
 
-function _adCpmSort(adA, adB) {
-  return (adB.cpm || 0.0) - (adA.cpm || 0.0);
-}
-
 function _getScreenResolution() {
   return [window.screen.width, window.screen.height].join('x');
-}
-
-function _getDigiTrustQueryParams() {
-  function getDigiTrustId() {
-    let digiTrustUser = window.DigiTrust && (config.getConfig('digiTrustId') || window.DigiTrust.getUser({member: 'T9QSFKPDN9'}));
-    return (digiTrustUser && digiTrustUser.success && digiTrustUser.identity) || null;
-  }
-  let digiTrustId = getDigiTrustId();
-  // Verify there is an ID and this user has not opted out
-  if (!digiTrustId || (digiTrustId.privacy && digiTrustId.privacy.optout)) {
-    return [];
-  }
-  return [
-    'dt.id', digiTrustId.id,
-    'dt.keyv', digiTrustId.keyv,
-    'dt.pref', 0
-  ];
 }
 
 function _renderCreative(script, impId) {
