@@ -173,8 +173,8 @@ export const spec = {
     // bids are not grouped if single request mode is not enabled
     if (config.getConfig('rubicon.singleRequest') !== true) {
       bidRequestGroups = nonVideoBidRequests.map(bidRequest => {
-        const slotParams = spec.createSlotParams(bidRequest, bidderRequest);
-        const combinedSlotParams = spec.combineSlotUrlParams([slotParams]);
+        const bidParams = spec.createSlotParams(bidRequest, bidderRequest);
+        const combinedSlotParams = spec.combineSlotUrlParams([bidParams]);
 
         return {
           method: 'GET',
@@ -186,27 +186,19 @@ export const spec = {
     }
     else {
       // single request requires bids to be grouped by site id into a single request
-      bidRequestGroups = bidRequests
-        .map(bidRequest => bidRequest.params.siteId)
-        .filter(utils.uniques)
-        .map(siteId => bidRequests.filter(bidRequest => (bidRequest.params.siteId === siteId)))
-        .map(bidRequests => {
-          if (bidRequests.length > 10) {
-            bidRequests = bidRequests.slice(0, 10);
-          }
-          const slotParams = bidRequests.map(item => {
-            spec.createSlotParams(item, bidderRequest)
-          });
-          const combinedSlotParams = spec.combineSlotUrlParams(slotParams);
+      let groupedBids = groupBidRequestsBySiteId(bidRequests);
+      bidRequestGroups = Object.keys(groupedBids).map(bidGroupKey => {
+        const bidsInGroup = groupedBids[bidGroupKey];
+        const combinedSlotParams = spec.combineSlotUrlParams(spec.createSlotParams(bidsInGroup));
 
-          return {
-            method: 'GET',
-            url: FASTLANE_ENDPOINT,
-            data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${combinedSlotParams[key]}&`, '?')
-            + `slots=1&rand=${Math.random()}`,
-            bidRequests
-          };
-        });
+        return {
+          method: 'GET',
+          url: FASTLANE_ENDPOINT,
+          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${combinedSlotParams[key]}&`, '?')
+          + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
+          bidRequests
+        };
+      });
     }
 
     return bidRequestGroups.concat(videoBidRequests);
@@ -327,7 +319,7 @@ export const spec = {
         return [];
       }
 
-      let bid = {
+      const bid = {
         requestId: bidRequests.bidRequest.bidId,
         currency: 'USD',
         creativeId: ad.creative_id,
@@ -421,6 +413,18 @@ function mapSizes(sizes) {
       }
       return result;
     }, []);
+}
+
+function groupBidRequestsBySiteId(bids) {
+  return bids.reduce((aggregate, bid, index, array) => {
+    if (!aggregate.hasOwnProperty(bid.params.siteId)) {
+      aggregate[bid.params.siteId] = [];
+    }
+    if (aggregate.hasOwnProperty(bid.params.siteId)) {
+      aggregate[bid.params.siteId].push(bid);
+    }
+    return aggregate;
+  }, {});
 }
 
 export function masSizeOrdering(sizes) {
