@@ -179,18 +179,22 @@ export const spec = {
     }
     else {
       // single request requires bids to be grouped by site id into a single request
-      const groupedBids = groupBidRequestsBySiteId(bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video'));
+      const groupedBidRequests = (bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video')).bids.reduce(function(groupedBids, bid) {
+        (groupedBids[bid.params['siteId']] = groupedBids[bid.params['siteId']] || []).push(bid);
+        return groupedBids;
+      }, {});
 
-      requests.concat(Object.keys(groupedBids).map(bidGroupKey => {
-        const bidsInGroup = groupedBids[bidGroupKey];
+      requests.concat(Object.keys(groupedBidRequests).map(bidGroupKey => {
+        const bidsInGroup = groupedBidRequests[bidGroupKey];
         const combinedSlotParams = spec.combineSlotUrlParams(spec.createSlotParams(bidsInGroup));
 
+        // single request mode must return grouped bidRequests instead of single bidRequest object
         return {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
           data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&`, '?')
           + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
-          bidRequest: groupedBids[bidGroupKey],
+          bidRequest: groupedBidRequests[bidGroupKey],
         };
       }));
     }
@@ -417,22 +421,6 @@ function mapSizes(sizes) {
       }
       return result;
     }, []);
-}
-
-/**
- * @param {Object[]} bids
- * @returns {Object} - Object array values for siteId keys
- */
-function groupBidRequestsBySiteId(bids) {
-  return bids.reduce((aggregate, bid) => {
-    if (!aggregate.hasOwnProperty(bid.params.siteId)) {
-      aggregate[bid.params.siteId] = [];
-    }
-    if (aggregate.hasOwnProperty(bid.params.siteId)) {
-      aggregate[bid.params.siteId].push(bid);
-    }
-    return aggregate;
-  }, {});
 }
 
 export function masSizeOrdering(sizes) {
