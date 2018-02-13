@@ -165,7 +165,7 @@ export const spec = {
     if (config.getConfig('rubicon.singleRequest') !== true) {
       // bids are not grouped if single request mode is not enabled
       requests.concat(bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video').map(bidRequest => {
-        const bidParams = spec.createSlotParams(bidRequest, bidderRequest);
+        const bidParams = spec.createSlotParams(bidRequest);
         const combinedSlotParams = spec.combineSlotUrlParams([bidParams]);
 
         return {
@@ -179,6 +179,7 @@ export const spec = {
     }
     else {
       // single request requires bids to be grouped by site id into a single request
+      // note: utils.groupBy wasn't used because deep property access was needed
       const groupedBidRequests = (bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video')).bids.reduce(function(groupedBids, bid) {
         (groupedBids[bid.params['siteId']] = groupedBids[bid.params['siteId']] || []).push(bid);
         return groupedBids;
@@ -188,7 +189,7 @@ export const spec = {
         const bidsInGroup = groupedBidRequests[bidGroupKey];
         const combinedSlotParams = spec.combineSlotUrlParams(spec.createSlotParams(bidsInGroup));
 
-        // single request mode must return grouped bidRequests instead of single bidRequest object
+        // SRA request returns grouped bidRequest arrays not a plain bidRequest
         return {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
@@ -240,6 +241,10 @@ export const spec = {
     return oCombinedSlotUrlParams;
   },
 
+  /**
+   * @param {BidRequest} bidRequest
+   * @returns {Object} - object key values named and formatted as slot params
+   */
   createSlotParams: function(bidRequest) {
     bidRequest.startTime = new Date().getTime();
 
@@ -290,7 +295,8 @@ export const spec = {
 
   /**
    * @param {*} responseObj
-   * @param {BidRequest|BidRequest[]} bidRequest - bidRequest an array if singleRequest mode active, otherwise will be a plain object
+   * @param {BidRequest|Object.<string, BidRequest[]>} bidRequest - if request was SRA the bidRequest argument will be a keyed BidRequest array object,
+   * non-SRA responses return a plain BidRequest object
    * @return {Bid[]} An array of bids which
    */
   interpretResponse: function(responseObj, {bidRequest}) {
