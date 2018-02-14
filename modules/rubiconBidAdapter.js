@@ -164,35 +164,42 @@ export const spec = {
     });
 
     if (config.getConfig('rubicon.singleRequest') !== true) {
+
       // bids are not grouped if single request mode is not enabled
       requests = videoRequests.concat(bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video').map(bidRequest => {
         const bidParams = spec.createSlotParams(bidRequest);
         const combinedSlotParams = spec.combineSlotUrlParams([bidParams]);
-
         return {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
-          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&`, '?') + `slots=1&rand=${Math.random()}`,
+          data: Object.keys(combinedSlotParams).reduce((paramString, key) => {
+            return (combinedSlotParams[key]) ? `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&` : paramString;
+          }, '?') + `slots=1&rand=${Math.random()}`,
           bidRequest
         };
       }));
     } else {
       // single request requires bids to be grouped by site id into a single request
       // note: utils.groupBy wasn't used because deep property access was needed
-      const groupedBidRequests = (bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video')).bids.reduce(function(groupedBids, bid) {
+      const nonVideoRequests = bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video');
+      const groupedBidRequests = nonVideoRequests.reduce((groupedBids, bid) => {
         (groupedBids[bid.params['siteId']] = groupedBids[bid.params['siteId']] || []).push(bid);
         return groupedBids;
       }, {});
 
       requests = videoRequests.concat(Object.keys(groupedBidRequests).map(bidGroupKey => {
         const bidsInGroup = groupedBidRequests[bidGroupKey];
-        const combinedSlotParams = spec.combineSlotUrlParams(spec.createSlotParams(bidsInGroup));
+        const combinedSlotParams = spec.combineSlotUrlParams(bidsInGroup.map(bid => {
+          return spec.createSlotParams(bid);
+        }));
 
         // SRA request returns grouped bidRequest arrays not a plain bidRequest
         return {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
-          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&`, '?') + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
+          data: Object.keys(combinedSlotParams).reduce((paramString, key) => {
+            return (combinedSlotParams[key]) ? `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&` : paramString;
+          }, '?') + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
           bidRequest: groupedBidRequests[bidGroupKey],
         };
       }));
@@ -418,10 +425,7 @@ function parseSizes(bid) {
         params.video.playerWidth,
         params.video.playerHeight
       ];
-    } else if (
-      Array.isArray(bid.sizes) && bid.sizes.length > 0 &&
-      Array.isArray(bid.sizes[0]) && bid.sizes[0].length > 1
-    ) {
+    } else if (Array.isArray(bid.sizes) && bid.sizes.length > 0 && Array.isArray(bid.sizes[0]) && bid.sizes[0].length > 1) {
       size = bid.sizes[0];
     }
     return size;
