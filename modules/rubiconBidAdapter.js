@@ -108,7 +108,8 @@ export const spec = {
    */
   buildRequests: function(bidRequests, bidderRequest) {
     // separate video bids because the requests are structured differently
-    const requests = bidRequests.filter(bidRequest => bidRequest.mediaType === 'video').map(bidRequest => {
+    let requests = [];
+    const videoRequests = bidRequests.filter(bidRequest => bidRequest.mediaType === 'video').map(bidRequest => {
       bidRequest.startTime = new Date().getTime();
       let params = bidRequest.params;
       let size = parseSizes(bidRequest);
@@ -164,7 +165,7 @@ export const spec = {
 
     if (config.getConfig('rubicon.singleRequest') !== true) {
       // bids are not grouped if single request mode is not enabled
-      requests.concat(bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video').map(bidRequest => {
+      requests = videoRequests.concat(bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video').map(bidRequest => {
         const bidParams = spec.createSlotParams(bidRequest);
         const combinedSlotParams = spec.combineSlotUrlParams([bidParams]);
 
@@ -185,7 +186,7 @@ export const spec = {
         return groupedBids;
       }, {});
 
-      requests.concat(Object.keys(groupedBidRequests).map(bidGroupKey => {
+      requests = videoRequests.concat(Object.keys(groupedBidRequests).map(bidGroupKey => {
         const bidsInGroup = groupedBidRequests[bidGroupKey];
         const combinedSlotParams = spec.combineSlotUrlParams(spec.createSlotParams(bidsInGroup));
 
@@ -199,7 +200,6 @@ export const spec = {
         };
       }));
     }
-
     return requests;
   },
 
@@ -364,7 +364,9 @@ export const spec = {
       }
 
       return bids;
-    }, []);
+    }, []).sort((adA, adB) => {
+      return (adB.cpm || 0.0) - (adA.cpm || 0.0);
+    });
   },
   getUserSyncs: function(syncOptions) {
     if (!hasSynced && syncOptions.iframeEnabled) {
