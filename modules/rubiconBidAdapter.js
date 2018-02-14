@@ -172,13 +172,11 @@ export const spec = {
         return {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
-          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&`, '?')
-          + `slots=1&rand=${Math.random()}`,
+          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&`, '?') + `slots=1&rand=${Math.random()}`,
           bidRequest
         };
       }));
-    }
-    else {
+    } else {
       // single request requires bids to be grouped by site id into a single request
       // note: utils.groupBy wasn't used because deep property access was needed
       const groupedBidRequests = (bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video')).bids.reduce(function(groupedBids, bid) {
@@ -194,8 +192,7 @@ export const spec = {
         return {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
-          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&`, '?')
-          + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
+          data: Object.keys(combinedSlotParams).reduce((paramString, key) => `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&`, '?') + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
           bidRequest: groupedBidRequests[bidGroupKey],
         };
       }));
@@ -265,7 +262,7 @@ export const spec = {
       'p_screen_res': _getScreenResolution(),
       'kw': Array.isArray(bidRequest.params.keywords) ? bidRequest.params.keywords.join(',') : '',
       'tk_user_key': bidRequest.params.userId,
-      'rf': !pageUrl ? utils.getTopWindowUrl() : pageUrl
+      'rf': utils.getTopWindowUrl()
     };
 
     // visitor properties
@@ -324,7 +321,7 @@ export const spec = {
       }
 
       // associate bidRequests under the assumption that response ads order matches request bids order
-      const associatedBidRequest = Array.isArray(bidRequest) ? bidRequest[i]: bidRequest;
+      const associatedBidRequest = Array.isArray(bidRequest) ? bidRequest[i] : bidRequest;
 
       if (typeof associatedBidRequest !== 'undefined') {
         let bid = {
@@ -423,7 +420,7 @@ function parseSizes(bid) {
       ];
     } else if (
       Array.isArray(bid.sizes) && bid.sizes.length > 0 &&
-        Array.isArray(bid.sizes[0]) && bid.sizes[0].length > 1
+      Array.isArray(bid.sizes[0]) && bid.sizes[0].length > 1
     ) {
       size = bid.sizes[0];
     }
@@ -437,7 +434,7 @@ function parseSizes(bid) {
 
 function mapSizes(sizes) {
   return utils.parseSizesInput(sizes)
-    // map sizes while excluding non-matches
+  // map sizes while excluding non-matches
     .reduce((result, size) => {
       let mappedSize = parseInt(sizeMap[size], 10);
       if (mappedSize) {
