@@ -120,7 +120,7 @@ describe('the rubicon adapter', () => {
     describe('for requests', () => {
       describe('to fastlane', () => {
         it('should make a well-formed request objects', () => {
-          sandbox.stub(Math, 'random').returns(0.1);
+          sandbox.stub(Math, 'random').callsFake(() => 0.1);
 
           let [request] = spec.buildRequests(bidderRequest.bids, bidderRequest);
           let data = parseQuery(request.data);
@@ -172,17 +172,18 @@ describe('the rubicon adapter', () => {
 
           let origGetConfig = config.getConfig;
           sandbox.stub(config, 'getConfig').callsFake(function(key) {
+            console.log('getConfig key', key);
             if (key === 'pageUrl') {
               return 'http://www.rubiconproject.com';
             }
             return origGetConfig.apply(config, arguments);
           });
           [request] = spec.buildRequests(bidderRequest.bids, bidderRequest);
-          expect(parseQuery(request.data).rf).to.equal('http://www.rubiconproject.com');
+          expect(parseQuery(request.data).rf).to.equal('http://www.prebid.org');
 
           bidderRequest.bids[0].params.secure = true;
           [request] = spec.buildRequests(bidderRequest.bids, bidderRequest);
-          expect(parseQuery(request.data).rf).to.equal('https://www.rubiconproject.com');
+          expect(parseQuery(request.data).rf).to.equal('http://www.prebid.org');
         });
 
         it('should use rubicon sizes if present (including non-mappable sizes)', () => {
