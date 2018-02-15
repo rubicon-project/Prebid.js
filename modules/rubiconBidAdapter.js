@@ -181,8 +181,8 @@ export const spec = {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
           data: Object.keys(combinedSlotParams).reduce((paramString, key) => {
-            return (combinedSlotParams[key]) ? `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&` : paramString;
-          }, '?') + `slots=1&rand=${Math.random()}`,
+            return (typeof combinedSlotParams[key] === 'string' || combinedSlotParams[key] !== '') ? `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&` : paramString;
+          }, '') + `slots=1&rand=${Math.random()}`,
           bidRequest
         };
       }));
@@ -206,8 +206,8 @@ export const spec = {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
           data: Object.keys(combinedSlotParams).reduce((paramString, key) => {
-            return (combinedSlotParams[key]) ? `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&` : paramString;
-          }, '?') + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
+            return (typeof combinedSlotParams[key] === 'string' || combinedSlotParams[key] !== '') ? `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&` : paramString;
+          }, '') + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
           bidRequest: groupedBidRequests[bidGroupKey],
         };
       }));
@@ -414,11 +414,11 @@ function _getDigiTrustQueryParams() {
   if (!digiTrustId || (digiTrustId.privacy && digiTrustId.privacy.optout)) {
     return [];
   }
-  return [
-    'dt.id', digiTrustId.id,
-    'dt.keyv', digiTrustId.keyv,
-    'dt.pref', 0
-  ];
+  return {
+    'dt.id': digiTrustId.id,
+    'dt.keyv': digiTrustId.keyv,
+    'dt.pref': 0
+  };
 }
 
 function _renderCreative(script, impId) {

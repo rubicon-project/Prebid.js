@@ -121,11 +121,10 @@ describe('the rubicon adapter', () => {
       describe('to fastlane', () => {
         it('should make a well-formed request objects', () => {
           sandbox.stub(Math, 'random').callsFake(() => 0.1);
-
           let [request] = spec.buildRequests(bidderRequest.bids, bidderRequest);
-          let data = parseQuery(request.data);
-
           expect(request.url).to.equal('//fastlane.rubiconproject.com/a/api/fastlane.json');
+
+          let data = parseQuery(request.data);
 
           let expectedQuery = {
             'account_id': '14062',
@@ -172,22 +171,21 @@ describe('the rubicon adapter', () => {
 
           let origGetConfig = config.getConfig;
           sandbox.stub(config, 'getConfig').callsFake(function(key) {
-            console.log('getConfig key', key);
             if (key === 'pageUrl') {
               return 'http://www.rubiconproject.com';
             }
             return origGetConfig.apply(config, arguments);
           });
           [request] = spec.buildRequests(bidderRequest.bids, bidderRequest);
-          expect(parseQuery(request.data).rf).to.equal('http://www.prebid.org');
+          expect(parseQuery(request.data).rf).to.equal('http://www.rubiconproject.com');
 
           bidderRequest.bids[0].params.secure = true;
           [request] = spec.buildRequests(bidderRequest.bids, bidderRequest);
-          expect(parseQuery(request.data).rf).to.equal('http://www.prebid.org');
+          expect(parseQuery(request.data).rf).to.equal('https://www.rubiconproject.com');
         });
 
         it('should use rubicon sizes if present (including non-mappable sizes)', () => {
-          var sizesBidderRequest = clone(bidderRequest);
+          const sizesBidderRequest = clone(bidderRequest);
           sizesBidderRequest.bids[0].params.sizes = [55, 57, 59, 801];
 
           let [request] = spec.buildRequests(sizesBidderRequest.bids, sizesBidderRequest);
@@ -198,7 +196,7 @@ describe('the rubicon adapter', () => {
         });
 
         it('should not validate bid request if no valid sizes', () => {
-          var sizesBidderRequest = clone(bidderRequest);
+          const sizesBidderRequest = clone(bidderRequest);
           sizesBidderRequest.bids[0].sizes = [[621, 250], [300, 251]];
 
           let result = spec.isBidRequestValid(sizesBidderRequest.bids[0]);
@@ -207,7 +205,7 @@ describe('the rubicon adapter', () => {
         });
 
         it('should not validate bid request if no account id is present', () => {
-          var noAccountBidderRequest = clone(bidderRequest);
+          const noAccountBidderRequest = clone(bidderRequest);
           delete noAccountBidderRequest.bids[0].params.accountId;
 
           let result = spec.isBidRequestValid(noAccountBidderRequest.bids[0]);
@@ -216,7 +214,7 @@ describe('the rubicon adapter', () => {
         });
 
         it('should allow a floor override', () => {
-          var floorBidderRequest = clone(bidderRequest);
+          const floorBidderRequest = clone(bidderRequest);
           floorBidderRequest.bids[0].params.floor = 2;
 
           let [request] = spec.buildRequests(floorBidderRequest.bids, floorBidderRequest);
