@@ -905,7 +905,7 @@ describe('the rubicon adapter', () => {
           expect(bids[0].cpm).to.be.equal(0);
         });
 
-        it('should handle a matching/combining adUnits with an Array of bidRequests', () => {
+        it('should handle a matching/combining adUnits with an Array of bidRequests (when singleRequest=true)', () => {
           let response = {
             'status': 'ok',
             'account_id': 14062,
