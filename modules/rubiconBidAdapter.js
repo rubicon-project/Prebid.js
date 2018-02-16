@@ -259,38 +259,41 @@ export const spec = {
    */
   createSlotParams: function(bidRequest) {
     bidRequest.startTime = new Date().getTime();
+    
+    const params = bidRequest.params;
 
     let page_url = config.getConfig('pageUrl');
-    if (bidRequest.params.referrer) {
-      page_url = bidRequest.params.referrer;
+    if (params.referrer) {
+      page_url = params.referrer;
     } else if (!page_url) {
       page_url = utils.getTopWindowUrl();
     }
 
-    page_url = bidRequest.params.secure ? page_url.replace(/^http:/i, 'https:') : page_url;
+    page_url = params.secure ? page_url.replace(/^http:/i, 'https:') : page_url;
 
     // use rubicon sizes if provided, otherwise adUnit.sizes
     const parsedSizes = parseSizes(bidRequest);
 
     const data = {
-      'account_id': bidRequest.params.accountId,
-      'site_id': bidRequest.params.siteId,
-      'zone_id': bidRequest.params.zoneId,
+      'account_id': params.accountId,
+      'site_id': params.siteId,
+      'zone_id': params.zoneId,
       'size_id': parsedSizes[0],
       'alt_size_ids': parsedSizes.slice(1).join(',') || undefined,
-      'p_pos': bidRequest.params.position || 'btf',
-      'rp_floor': (parseFloat(bidRequest.params.floor) > 0.01) ? parseFloat(bidRequest.params.floor) : 0.01,
+      'p_pos': params.position || 'btf',
+      'rp_floor': (parseFloat(params.floor) > 0.01) ? parseFloat(params.floor) : 0.01,
       'rp_secure': isSecure() ? '1' : '0',
       'tk_flint': INTEGRATION,
       'x_source.tid': bidRequest.transactionId,
       'p_screen_res': _getScreenResolution(),
-      'kw': Array.isArray(bidRequest.params.keywords) ? bidRequest.params.keywords.join(',') : '',
-      'tk_user_key': bidRequest.params.userId,
+      'kw': Array.isArray(params.keywords) ? params.keywords.join(',') : '',
+      'tk_user_key': params.userId,
+      'tg_fl.eid': params.adUnitCode,
       'rf': page_url
     };
 
     // visitor properties
-    const visitor = bidRequest.params.visitor;
+    const visitor = params.visitor;
     if (visitor !== null && typeof visitor === 'object') {
       Object.keys(visitor).forEach((key) => {
         data[`tg_v.${key}`] = visitor[key];
@@ -298,7 +301,7 @@ export const spec = {
     }
 
     // inventory properties
-    const inventory = bidRequest.params.inventory;
+    const inventory = params.inventory;
     if (inventory !== null && typeof inventory === 'object') {
       Object.keys(inventory).forEach((key) => {
         data[`tg_i.${key}`] = inventory[key];
