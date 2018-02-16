@@ -171,7 +171,8 @@ export const spec = {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
           data: Object.keys(bidParams).reduce((paramString, key) => {
-            return (typeof bidParams[key] !== 'undefined' && bidParams[key] !== '') ? `${paramString}${key}=${encodeURIComponent(bidParams[key])}&` : paramString;
+            const propValue = bidParams[key];
+            return ((utils.isStr(propValue) && propValue !== '') || utils.isNumber(propValue)) ? `${paramString}${key}=${encodeURIComponent(propValue)}&` : paramString;
           }, '') + `slots=1&rand=${Math.random()}`,
           bidRequest
         };
@@ -191,18 +192,18 @@ export const spec = {
         // fastlane SRA has a limit of 10 slots
         if (bidsInGroup.length > 10) {
           bidsInGroup = bidsInGroup.slice(0, 10);
+          utils.logWarn(`single request mode has a limit of 10 bids: ${bidsInGroup.length - 10} bids were not sent`);
         }
 
-        const combinedSlotParams = spec.combineSlotUrlParams(bidsInGroup.map(bid => {
-          return spec.createSlotParams(bid);
-        }));
+        const combinedSlotParams = spec.combineSlotUrlParams(bidsInGroup.map(spec.createSlotParams));
 
         // SRA request returns grouped bidRequest arrays not a plain bidRequest
         return {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
           data: Object.keys(combinedSlotParams).reduce((paramString, key) => {
-            return (typeof combinedSlotParams[key] !== 'undefined' && combinedSlotParams[key] !== '') ? `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&` : paramString;
+            const propValue = combinedSlotParams[key];
+            return ((utils.isStr(propValue) && propValue !== '') || utils.isNumber(propValue)) ? `${paramString}${key}=${encodeURIComponent(propValue)}&` : paramString;
           }, '') + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
           bidRequest: groupedBidRequests[bidGroupKey],
         };
