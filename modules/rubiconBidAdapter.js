@@ -188,7 +188,7 @@ export const spec = {
       requests = videoRequests.concat(Object.keys(groupedBidRequests).map(bidGroupKey => {
         let bidsInGroup = groupedBidRequests[bidGroupKey];
 
-        // limit bids to a max of 10
+        // fastlane SRA has a limit of 10 slots
         if (bidsInGroup.length > 10) {
           bidsInGroup = bidsInGroup.slice(0, 10);
         }
