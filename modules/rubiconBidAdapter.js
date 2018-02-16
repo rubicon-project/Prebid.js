@@ -191,8 +191,8 @@ export const spec = {
 
         // fastlane SRA has a limit of 10 slots
         if (bidsInGroup.length > 10) {
-          bidsInGroup = bidsInGroup.slice(0, 10);
           utils.logWarn(`single request mode has a limit of 10 bids: ${bidsInGroup.length - 10} bids were not sent`);
+          bidsInGroup = bidsInGroup.slice(0, 10);
         }
 
         const combinedSlotParams = spec.combineSlotUrlParams(bidsInGroup.map(spec.createSlotParams));
