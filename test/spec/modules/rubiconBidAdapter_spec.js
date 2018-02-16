@@ -535,6 +535,28 @@ describe('the rubicon adapter', () => {
             let serverRequests = spec.buildRequests(bidderRequest.bids, bidderRequest);
             expect(serverRequests).that.is.an('array').of.length(3);
           });
+
+          it('should not send more than 10 slots', () => {
+            sandbox.stub(config, 'getConfig').callsFake((key) => {
+              const config = {
+                'rubicon.singleRequest': true
+              };
+              return config[key];
+            });
+
+            const bidCopy = clone(bidderRequest.bids[0]);
+            bidderRequest.bids.push(bidCopy);
+
+            for (let i = 0; i < 15; i++) {
+              const bidCopy = clone(bidderRequest.bids[0]);
+              bidCopy.params.siteId = '70608';
+              bidderRequest.bids.push(bidCopy);
+            }
+
+            let serverRequests = spec.buildRequests(bidderRequest.bids, bidderRequest);
+            const foundSlotsCount = serverRequests[0].data.indexOf('&slots=10&');
+            expect(foundSlotsCount !== -1).to.equal(true);
+          });
         });
       });
 
