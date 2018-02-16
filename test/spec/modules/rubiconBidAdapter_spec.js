@@ -457,14 +457,14 @@ describe('the rubicon adapter', () => {
               return config[key];
             });
 
-            const bidCopy = JSON.parse(JSON.stringify(bidderRequest.bids[0]));
+            const bidCopy = clone(bidderRequest.bids[0]);
             bidderRequest.bids.push(bidCopy);
 
-            const bidCopy2 = JSON.parse(JSON.stringify(bidderRequest.bids[0]));
+            const bidCopy2 = clone(bidderRequest.bids[0]);
             bidCopy2.params.siteId = '32001';
             bidderRequest.bids.push(bidCopy2);
 
-            const bidCopy3 = JSON.parse(JSON.stringify(bidderRequest.bids[0]));
+            const bidCopy3 = clone(bidderRequest.bids[0]);
             bidCopy3.params.siteId = '32001';
             bidderRequest.bids.push(bidCopy3);
 
@@ -480,14 +480,14 @@ describe('the rubicon adapter', () => {
               return config[key];
             });
 
-            const bidCopy = JSON.parse(JSON.stringify(bidderRequest.bids[0]));
+            const bidCopy = clone(bidderRequest.bids[0]);
             bidderRequest.bids.push(bidCopy);
 
-            const bidCopy2 = JSON.parse(JSON.stringify(bidderRequest.bids[0]));
+            const bidCopy2 = clone(bidderRequest.bids[0]);
             bidCopy2.params.siteId = '32001';
             bidderRequest.bids.push(bidCopy2);
 
-            const bidCopy3 = JSON.parse(JSON.stringify(bidderRequest.bids[0]));
+            const bidCopy3 = clone(bidderRequest.bids[0]);
             bidCopy3.params.siteId = '32001';
             bidderRequest.bids.push(bidCopy3);
 
@@ -503,18 +503,18 @@ describe('the rubicon adapter', () => {
               return config[key];
             });
 
-            const bidCopy = JSON.parse(JSON.stringify(bidderRequest.bids[0]));
+            const bidCopy = clone(bidderRequest.bids[0]);
             bidderRequest.bids.push(bidCopy);
 
-            const bidCopy2 = JSON.parse(JSON.stringify(bidderRequest.bids[0]));
+            const bidCopy2 = clone(bidderRequest.bids[0]);
             bidCopy2.params.siteId = '32001';
             bidderRequest.bids.push(bidCopy2);
 
-            const bidCopy3 = JSON.parse(JSON.stringify(bidderRequest.bids[0]));
+            const bidCopy3 = clone(bidderRequest.bids[0]);
             bidCopy3.params.siteId = '32001';
             bidderRequest.bids.push(bidCopy3);
 
-            const bidCopy4 = JSON.parse(JSON.stringify(bidderRequest.bids[0]));
+            const bidCopy4 = clone(bidderRequest.bids[0]);
             bidCopy4.mediaType = 'video';
             bidCopy4.params.video = {
               'language': 'en',
