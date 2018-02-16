@@ -116,7 +116,7 @@ export const spec = {
       let size = parseSizes(bidRequest);
 
       let data = {
-        page_url: _getPageUrl(),
+        page_url: _getPageUrl(bidRequest),
         resolution: _getScreenResolution(),
         account_id: params.accountId,
         integration: INTEGRATION,
@@ -186,7 +186,13 @@ export const spec = {
       }, {});
 
       requests = videoRequests.concat(Object.keys(groupedBidRequests).map(bidGroupKey => {
-        const bidsInGroup = groupedBidRequests[bidGroupKey];
+        let bidsInGroup = groupedBidRequests[bidGroupKey];
+
+        // limit bids to a max of 10
+        if (bidsInGroup.length > 10) {
+          bidsInGroup = bidsInGroup.slice(0, 10);
+        }
+
         const combinedSlotParams = spec.combineSlotUrlParams(bidsInGroup.map(bid => {
           return spec.createSlotParams(bid);
         }));
@@ -270,7 +276,7 @@ export const spec = {
       'kw': Array.isArray(params.keywords) ? params.keywords.join(',') : '',
       'tk_user_key': params.userId,
       'tg_fl.eid': bidRequest.code,
-      'rf': _getPageUrl()
+      'rf': _getPageUrl(bidRequest)
     };
 
     // visitor properties
@@ -405,7 +411,11 @@ function _getDigiTrustQueryParams() {
   };
 }
 
-function _getPageUrl() {
+/**
+ * @param {BidRequest} bidRequest
+ * @returns {string}
+ */
+function _getPageUrl(bidRequest) {
   let page_url = config.getConfig('pageUrl');
   if (bidRequest.params.referrer) {
     page_url = bidRequest.params.referrer;
