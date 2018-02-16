@@ -112,20 +112,11 @@ export const spec = {
     const videoRequests = bidRequests.filter(bidRequest => bidRequest.mediaType === 'video').map(bidRequest => {
       bidRequest.startTime = new Date().getTime();
 
-      let page_url = config.getConfig('pageUrl');
-      if (bidRequest.params.referrer) {
-        page_url = bidRequest.params.referrer;
-      } else if (!page_url) {
-        page_url = utils.getTopWindowUrl();
-      }
-
-      page_url = bidRequest.params.secure ? page_url.replace(/^http:/i, 'https:') : page_url;
-
       let params = bidRequest.params;
       let size = parseSizes(bidRequest);
 
       let data = {
-        page_url,
+        page_url: _getPageUrl(),
         resolution: _getScreenResolution(),
         account_id: params.accountId,
         integration: INTEGRATION,
@@ -261,15 +252,6 @@ export const spec = {
 
     const params = bidRequest.params;
 
-    let page_url = config.getConfig('pageUrl');
-    if (params.referrer) {
-      page_url = params.referrer;
-    } else if (!page_url) {
-      page_url = utils.getTopWindowUrl();
-    }
-
-    page_url = params.secure ? page_url.replace(/^http:/i, 'https:') : page_url;
-
     // use rubicon sizes if provided, otherwise adUnit.sizes
     const parsedSizes = parseSizes(bidRequest);
 
@@ -288,7 +270,7 @@ export const spec = {
       'kw': Array.isArray(params.keywords) ? params.keywords.join(',') : '',
       'tk_user_key': params.userId,
       'tg_fl.eid': bidRequest.code,
-      'rf': page_url
+      'rf': _getPageUrl()
     };
 
     // visitor properties
@@ -421,6 +403,16 @@ function _getDigiTrustQueryParams() {
     'dt.keyv': digiTrustId.keyv,
     'dt.pref': 0
   };
+}
+
+function _getPageUrl() {
+  let page_url = config.getConfig('pageUrl');
+  if (bidRequest.params.referrer) {
+    page_url = bidRequest.params.referrer;
+  } else if (!page_url) {
+    page_url = utils.getTopWindowUrl();
+  }
+  return bidRequest.params.secure ? page_url.replace(/^http:/i, 'https:') : page_url;
 }
 
 function _renderCreative(script, impId) {
