@@ -708,7 +708,6 @@ describe('the rubicon adapter', () => {
             'p_pos': 'atf',
             'rp_floor': 0.01,
             'rp_secure': /[01]/,
-            'rand': '0.1',
             'tk_flint': INTEGRATION,
             'x_source.tid': 'd45dd707-a418-42ec-b8a7-b70a6c6fab0b',
             'p_screen_res': /\d+x\d+/,
