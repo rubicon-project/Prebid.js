@@ -81,6 +81,7 @@ describe('the rubicon adapter', () => {
             referrer: 'localhost'
           },
           adUnitCode: '/19968336/header-bid-tag-0',
+          code: 'div-1',
           sizes: [[300, 250], [320, 50]],
           bidId: '2ffb201a808da7',
           bidderRequestId: '178e34bad3658f',
@@ -145,6 +146,7 @@ describe('the rubicon adapter', () => {
             'tg_v.lastsearch': 'iphone',
             'tg_i.rating': '5-star',
             'tg_i.prodtype': 'tech',
+            'tg_fl.eid': 'div-1',
             'rf': 'localhost'
           };
 

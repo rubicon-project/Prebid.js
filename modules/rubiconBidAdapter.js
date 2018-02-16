@@ -288,7 +288,7 @@ export const spec = {
       'p_screen_res': _getScreenResolution(),
       'kw': Array.isArray(params.keywords) ? params.keywords.join(',') : '',
       'tk_user_key': params.userId,
-      'tg_fl.eid': params.adUnitCode,
+      'tg_fl.eid': bidRequest.code,
       'rf': page_url
     };
 
