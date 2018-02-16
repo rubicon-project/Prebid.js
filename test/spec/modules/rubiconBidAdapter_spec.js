@@ -696,6 +696,45 @@ describe('the rubicon adapter', () => {
           ])).to.deep.equal({p1: 'foo;foo;', p2: 'test;bar;test', p3: 'baz;;'});
         });
       });
+
+      describe('createSlotParams', () => {
+        it('should return a valid slot params object', () => {
+          let expectedQuery = {
+            'account_id': '14062',
+            'site_id': '70608',
+            'zone_id': '335918',
+            'size_id': 15,
+            'alt_size_ids': '43',
+            'p_pos': 'atf',
+            'rp_floor': 0.01,
+            'rp_secure': /[01]/,
+            'rand': '0.1',
+            'tk_flint': INTEGRATION,
+            'x_source.tid': 'd45dd707-a418-42ec-b8a7-b70a6c6fab0b',
+            'p_screen_res': /\d+x\d+/,
+            'tk_user_key': '12346',
+            'kw': 'a,b,c',
+            'tg_v.ucat': 'new',
+            'tg_v.lastsearch': 'iphone',
+            'tg_i.rating': '5-star',
+            'tg_i.prodtype': 'tech',
+            'tg_fl.eid': 'div-1',
+            'rf': 'localhost'
+          };
+
+          const slotParams = spec.createSlotParams(bidderRequest.bids[0]);
+
+          // test that all values above are both present and correct
+          Object.keys(expectedQuery).forEach(key => {
+            const value = expectedQuery[key];
+            if (value instanceof RegExp) {
+              expect(slotParams[key]).to.match(value);
+            } else {
+              expect(slotParams[key]).to.equal(value);
+            }
+          });
+        });
+      });
     });
 
     describe('interpretResponse', () => {
