@@ -259,7 +259,7 @@ export const spec = {
    */
   createSlotParams: function(bidRequest) {
     bidRequest.startTime = new Date().getTime();
-    
+
     const params = bidRequest.params;
 
     let page_url = config.getConfig('pageUrl');
