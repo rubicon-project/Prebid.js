@@ -176,12 +176,11 @@ export const spec = {
       // bids are not grouped if single request mode is not enabled
       requests = videoRequests.concat(bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video').map(bidRequest => {
         const bidParams = spec.createSlotParams(bidRequest);
-        const combinedSlotParams = spec.combineSlotUrlParams([bidParams]);
         return {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
-          data: Object.keys(combinedSlotParams).reduce((paramString, key) => {
-            return (typeof combinedSlotParams[key] === 'string' || combinedSlotParams[key] !== '') ? `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&` : paramString;
+          data: Object.keys(bidParams).reduce((paramString, key) => {
+            return (typeof bidParams[key] !== 'undefined' && bidParams[key] !== '') ? `${paramString}${key}=${encodeURIComponent(bidParams[key])}&` : paramString;
           }, '') + `slots=1&rand=${Math.random()}`,
           bidRequest
         };
@@ -206,7 +205,7 @@ export const spec = {
           method: 'GET',
           url: FASTLANE_ENDPOINT,
           data: Object.keys(combinedSlotParams).reduce((paramString, key) => {
-            return (typeof combinedSlotParams[key] === 'string' || combinedSlotParams[key] !== '') ? `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&` : paramString;
+            return (typeof combinedSlotParams[key] !== 'undefined' && combinedSlotParams[key] !== '') ? `${paramString}${key}=${encodeURIComponent(combinedSlotParams[key])}&` : paramString;
           }, '') + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
           bidRequest: groupedBidRequests[bidGroupKey],
         };

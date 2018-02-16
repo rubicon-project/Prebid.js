@@ -855,6 +855,68 @@ describe('the rubicon adapter', () => {
 
           expect(bids).to.be.lengthOf(0);
         });
+
+        it('should handle a bidRequest argument of type Array', () => {
+          let response = {
+            'status': 'ok',
+            'account_id': 14062,
+            'site_id': 70608,
+            'zone_id': 530022,
+            'size_id': 15,
+            'alt_size_ids': [
+              43
+            ],
+            'tracking': '',
+            'inventory': {},
+            'ads': [{
+              'status': 'ok',
+              'cpm': 0,
+              'size_id': 15
+            }]
+          };
+
+          let bids = spec.interpretResponse({ body: response }, {
+            bidRequest: [bidderRequest.bids[0]]
+          });
+
+          expect(bids).to.be.lengthOf(1);
+          expect(bids[0].cpm).to.be.equal(0);
+        });
+
+        it('should handle a matching/combining adUnits with an Array of bidRequests', () => {
+          let response = {
+            'status': 'ok',
+            'account_id': 14062,
+            'site_id': 70608,
+            'zone_id': 530022,
+            'tracking': '',
+            'inventory': {},
+            'ads': [{
+              'status': 'ok',
+              'cpm': 0,
+              'zone_id': 25000,
+              'size_id': 15
+            },
+            {
+              'status': 'ok',
+              'cpm': 0.51,
+              'zone_id': 50000,
+              'size_id': 13,
+            }]
+          };
+
+          const bid2 = clone(bidderRequest.bids[0]);
+          bid2.sizes = [[200, 200]];
+          bidderRequest.bids.push(bid2);
+
+          let bids = spec.interpretResponse({ body: response }, {
+            bidRequest: bidderRequest.bids
+          });
+
+          expect(bids).to.be.lengthOf(2);
+          expect(bids[0].width).to.be.equal(200);
+          expect(bids[1].width).to.be.equal(300);
+        });
       });
 
       describe('for video', () => {
