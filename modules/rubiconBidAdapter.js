@@ -269,7 +269,7 @@ export const spec = {
       'size_id': parsedSizes[0],
       'alt_size_ids': parsedSizes.slice(1).join(',') || undefined,
       'p_pos': params.position || 'btf',
-      'rp_floor': (parseFloat(params.floor) > 0.01) ? parseFloat(params.floor) : 0.01,
+      'rp_floor': (params.floor && parseFloat(params.floor) > 0.01) ? parseFloat(params.floor) : 0.01,
       'rp_secure': isSecure() ? '1' : '0',
       'tk_flint': INTEGRATION,
       'x_source.tid': bidRequest.transactionId,
