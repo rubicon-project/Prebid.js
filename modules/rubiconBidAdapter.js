@@ -1,7 +1,7 @@
 import * as utils from 'src/utils';
 import { registerBidder } from 'src/adapters/bidderFactory';
 import { config } from 'src/config';
-import {BANNER, VIDEO} from "src/mediaTypes";
+import {BANNER, VIDEO} from 'src/mediaTypes';
 
 const INTEGRATION = 'pbjs_lite_v$prebid.version$';
 
@@ -307,15 +307,11 @@ export const spec = {
   },
 
   /**
-   * check if bidRequest is for a video bid
-   * note: hasLegacyVideoConfig will eventually be deprecated
-   * testing for the mediaTypes object is preferred
    * @param {BidRequest} bidRequest
    * @returns {boolean}
    */
   hasVideoMediaType: function(bidRequest) {
-    const hasLegacyVideoConfig = (bidRequest.mediaType === 'video');
-    return (hasLegacyVideoConfig || (typeof bidRequest.mediaTypes === 'object' && bidRequest.mediaTypes.hasOwnProperty('video')));
+    return ((bidRequest.mediaType === VIDEO) || (typeof utils.deepAccess(bidRequest, `mediaTypes.${VIDEO}`) !== 'undefined'));
   },
 
   /**
@@ -325,7 +321,7 @@ export const spec = {
    * @return {Bid[]} An array of bids which
    */
   interpretResponse: function(responseObj, {bidRequest}) {
-    responseObj = responseObj.body
+    responseObj = responseObj.body;
     let ads = responseObj.ads;
 
     // check overall response
@@ -367,7 +363,7 @@ export const spec = {
           }
         };
 
-        if (spec.hasVideoMediaType(associatedBidRequest)) {
+        if (ad.creative_type === VIDEO) {
           bid.width = associatedBidRequest.params.video.playerWidth;
           bid.height = associatedBidRequest.params.video.playerHeight;
           bid.vastUrl = ad.creative_depot_url;
@@ -453,7 +449,8 @@ function _renderCreative(script, impId) {
 
 function parseSizes(bid) {
   let params = bid.params;
-  if (bid.mediaType === 'video') {
+  const videoMediaType = utils.deepAccess(bid, `mediaTypes.${VIDEO}`);
+  if (bid.mediaType === 'video' || videoMediaType) {
     let size = [];
     if (params.video.playerWidth && params.video.playerHeight) {
       size = [
