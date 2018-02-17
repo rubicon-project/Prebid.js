@@ -734,6 +734,35 @@ describe('the rubicon adapter', () => {
           });
         });
       });
+
+      describe('hasVideoMediaType', () => {
+        it('should return true if mediaType is true', () => {
+          createVideoBidderRequest();
+          const legacyVideoTypeBidRequest = spec.hasVideoMediaType(bidderRequest.bids[0]);
+          expect(legacyVideoTypeBidRequest).is.equal(true);
+        });
+
+        it('should return false if bidRequest.mediaType is not equal to video', () => {
+          expect(spec.hasVideoMediaType({
+            mediaType: 'banner'
+          })).is.equal(false);
+        });
+
+        it('should return false if bidRequest.mediaType is not defined', () => {
+          expect(spec.hasVideoMediaType({})).is.equal(false);
+        });
+
+        it('should return true if bidRequest.mediaTypes.video object exists', () => {
+          expect(spec.hasVideoMediaType({
+            mediaTypes: {
+              video: {
+                context: 'outstream',
+                playerSize: [300, 250]
+              }
+            }
+          })).is.equal(true);
+        });
+      });
     });
 
     describe('interpretResponse', () => {

@@ -1,6 +1,7 @@
 import * as utils from 'src/utils';
 import { registerBidder } from 'src/adapters/bidderFactory';
 import { config } from 'src/config';
+import {BANNER, VIDEO} from "src/mediaTypes";
 
 const INTEGRATION = 'pbjs_lite_v$prebid.version$';
 
@@ -73,7 +74,7 @@ utils._each(sizeMap, (item, key) => sizeMap[item] = key);
 export const spec = {
   code: 'rubicon',
   aliases: ['rubiconLite'],
-  supportedMediaTypes: ['banner', 'video'],
+  supportedMediaTypes: [BANNER, VIDEO],
   /**
    * @param {object} bid
    * @return boolean
@@ -306,6 +307,18 @@ export const spec = {
   },
 
   /**
+   * check if bidRequest is for a video bid
+   * note: hasLegacyVideoConfig will eventually be deprecated
+   * testing for the mediaTypes object is preferred
+   * @param {BidRequest} bidRequest
+   * @returns {boolean}
+   */
+  hasVideoMediaType: function(bidRequest) {
+    const hasLegacyVideoConfig = (bidRequest.mediaType === 'video');
+    return (hasLegacyVideoConfig || (typeof bidRequest.mediaTypes === 'object' && bidRequest.mediaTypes.hasOwnProperty('video')));
+  },
+
+  /**
    * @param {*} responseObj
    * @param {BidRequest|Object.<string, BidRequest[]>} bidRequest - if request was SRA the bidRequest argument will be a keyed BidRequest array object,
    * non-SRA responses return a plain BidRequest object
@@ -321,7 +334,7 @@ export const spec = {
     }
 
     // video ads array is wrapped in an object
-    if (typeof bidRequest === 'object' && !Array.isArray(bidRequest) && bidRequest.mediaType === 'video' && typeof ads === 'object') {
+    if (typeof bidRequest === 'object' && !Array.isArray(bidRequest) && spec.hasVideoMediaType(bidRequest) && typeof ads === 'object') {
       ads = ads[bidRequest.adUnitCode];
     }
 
@@ -354,7 +367,7 @@ export const spec = {
           }
         };
 
-        if (associatedBidRequest.mediaType === 'video') {
+        if (spec.hasVideoMediaType(associatedBidRequest)) {
           bid.width = associatedBidRequest.params.video.playerWidth;
           bid.height = associatedBidRequest.params.video.playerHeight;
           bid.vastUrl = ad.creative_depot_url;
