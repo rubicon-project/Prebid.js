@@ -263,6 +263,7 @@ export const spec = {
     const parsedSizes = parseSizes(bidRequest);
 
     const data = {
+      'iid': 1,
       'account_id': params.accountId,
       'site_id': params.siteId,
       'zone_id': params.zoneId,
