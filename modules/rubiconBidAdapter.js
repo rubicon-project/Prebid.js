@@ -208,7 +208,7 @@ export const spec = {
             const propValue = combinedSlotParams[key];
             return ((utils.isStr(propValue) && propValue !== '') || utils.isNumber(propValue)) ? `${paramString}${key}=${encodeURIComponent(propValue)}&` : paramString;
           }, '') + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
-          bidRequest: groupedBidRequests[bidGroupKey],
+          bidRequest: bidsInGroup,
         };
       }));
     }
