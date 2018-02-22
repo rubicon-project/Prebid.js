@@ -452,6 +452,9 @@ describe('the rubicon adapter', () => {
 
         describe('singleRequest config', () => {
           it('should group all bid requests with the same site id', () => {
+
+            sandbox.stub(Math, 'random').callsFake(() => 0.1);
+
             sandbox.stub(config, 'getConfig').callsFake((key) => {
               const config = {
                 'rubicon.singleRequest': true
@@ -459,19 +462,131 @@ describe('the rubicon adapter', () => {
               return config[key];
             });
 
+            let expectedQuery = {
+              'account_id': '14062',
+              'site_id': '70608',
+              'zone_id': '335918',
+              'size_id': '15',
+              'alt_size_ids': '43',
+              'p_pos': 'atf',
+              'rp_floor': '0.01',
+              'rp_secure': /[01]/,
+              'rand': '0.1',
+              'tk_flint': INTEGRATION,
+              'x_source.tid': 'd45dd707-a418-42ec-b8a7-b70a6c6fab0b',
+              'p_screen_res': /\d+x\d+/,
+              'tk_user_key': '12346',
+              'kw': 'a,b,c',
+              'tg_v.ucat': 'new',
+              'tg_v.lastsearch': 'iphone',
+              'tg_i.rating': '5-star',
+              'tg_i.prodtype': 'tech',
+              'tg_fl.eid': 'div-1',
+              'rf': 'localhost'
+            };
+
             const bidCopy = clone(bidderRequest.bids[0]);
+            bidCopy.params.siteId = '70608';
+            bidCopy.params.zoneId = '1111';
             bidderRequest.bids.push(bidCopy);
 
             const bidCopy2 = clone(bidderRequest.bids[0]);
-            bidCopy2.params.siteId = '32001';
+            bidCopy2.params.siteId = '99999';
+            bidCopy2.params.zoneId = '2222';
             bidderRequest.bids.push(bidCopy2);
 
             const bidCopy3 = clone(bidderRequest.bids[0]);
-            bidCopy3.params.siteId = '32001';
+            bidCopy3.params.siteId = '99999';
+            bidCopy3.params.zoneId = '3333';
             bidderRequest.bids.push(bidCopy3);
 
             let serverRequests = spec.buildRequests(bidderRequest.bids, bidderRequest);
-            expect(serverRequests).that.is.an('array').of.length(2);
+
+            // array length should match the num of unique 'siteIds'
+            expect(serverRequests).to.be.an('array').to.have.lengthOf(2);
+
+            // collect all bidRequests so order can be checked against the url param slot order
+            const bidRequests = serverRequests.reduce((aggregator, item) => aggregator.concat(item.bidRequest), []);
+            let bidRequestIndex = 0;
+
+            serverRequests.forEach(item => {
+              expect(item).to.be.an('object');
+              expect(item).to.have.property('method');
+              expect(item).to.have.property('url');
+              expect(item).to.have.property('data');
+              expect(item).to.have.property('bidRequest');
+
+              expect(item.method).to.equal('GET');
+              expect(item.url).to.equal('//fastlane.rubiconproject.com/a/api/fastlane.json');
+              expect(item.data).to.be.an('string');
+
+              // 'bidRequest' type must be 'array' if SRA enabled
+              expect(item.bidRequest).to.be.an('array').to.have.lengthOf(2);
+
+              item.bidRequest.forEach((bidRequestItem, i, array) => {
+                expect(bidRequestItem).to.be.an('object');
+                // every 'siteId' values need to match
+                expect(bidRequestItem.params.siteId).to.equal(array[0].params.siteId);
+              });
+
+              const data = parseQuery(item.data);
+
+              Object.keys(expectedQuery).forEach(key => {
+                expect(data).to.have.property(key);
+
+                // extract semicolon delineated values
+                const params = data[key].split(';');
+
+                // skip value test for site and zone ids
+                if (key !== 'site_id' && key !== 'zone_id') {
+                  if (expectedQuery[key] instanceof RegExp) {
+                    params.forEach(paramItem => {
+                      expect(paramItem).to.match(expectedQuery[key]);
+                    });
+                  }
+                  else {
+                    expect(params).to.contain(expectedQuery[key]);
+                  }
+                }
+
+                // check parsed url data list order with requestBid list, items must have same index in both lists
+                if (key === 'zone_id') {
+                  params.forEach((p) => {
+                    expect(bidRequests[bidRequestIndex]).to.be.an('object');
+                    expect(bidRequests[bidRequestIndex].params).to.be.an('object');
+
+                    // 'zone_id' is used to verify so each bid must have a unique 'zone_id'
+                    expect(p).to.equal(bidRequests[bidRequestIndex].params.zoneId);
+
+                    // increment to next bidRequest index having verified that item positions match in url params and bidRequest lists
+                    bidRequestIndex++;
+                  });
+                }
+              });
+            });
+          });
+
+          it('should not send more than 10 bids in a request', () => {
+            sandbox.stub(config, 'getConfig').callsFake((key) => {
+              const config = {
+                'rubicon.singleRequest': true
+              };
+              return config[key];
+            });
+
+            for (let i = 0; i < 20; i++) {
+              let bidCopy = clone(bidderRequest.bids[0]);
+              bidCopy.params.zoneId = `${i}0000`;
+              bidderRequest.bids.push(bidCopy);
+            }
+
+            const serverRequests = spec.buildRequests(bidderRequest.bids, bidderRequest);
+
+            // siteId object key for bidRequestGroup
+            const objKey = Object.keys(serverRequests[0].bidRequest)[0];
+
+            // if bids are greater than 10, they are dropped
+            // expect(serverRequests[0].bidRequest[objKey]).to.have.lengthOf(10);
           });
 
           it('should not group bid requests if singleRequest does not equal true', () => {
