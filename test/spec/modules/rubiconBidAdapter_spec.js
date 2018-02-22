@@ -41,8 +41,10 @@ describe('the rubicon adapter', () => {
   function createLegacyVideoBidderRequest() {
     let bid = bidderRequest.bids[0];
 
+    // Legacy property (Prebid <1.0)
     bid.mediaType = 'video';
 
+    // Current property (Prebid 1.0)
     bid.params.video = {
       'language': 'en',
       'p_aso.video.ext.skip': true,

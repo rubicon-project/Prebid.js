@@ -351,7 +351,7 @@ export const spec = {
       // associate bidRequests under the assumption that response ads order matches request bids order
       const associatedBidRequest = Array.isArray(bidRequest) ? bidRequest[i] : bidRequest;
 
-      if (typeof associatedBidRequest !== 'undefined') {
+      if (associatedBidRequest && typeof associatedBidRequest === 'object') {
         let bid = {
           requestId: associatedBidRequest.bidId,
           currency: 'USD',
@@ -386,6 +386,8 @@ export const spec = {
           }, {'rpfl_elemid': associatedBidRequest.adUnitCode});
 
         bids.push(bid);
+      } else {
+        utils.logError(`bidRequest undefined at index position:${i}`, bidRequest, responseObj);
       }
 
       return bids;
