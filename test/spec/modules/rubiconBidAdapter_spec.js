@@ -582,11 +582,8 @@ describe('the rubicon adapter', () => {
 
             const serverRequests = spec.buildRequests(bidderRequest.bids, bidderRequest);
 
-            // siteId object key for bidRequestGroup
-            const objKey = Object.keys(serverRequests[0].bidRequest)[0];
-
             // if bids are greater than 10, they are dropped
-            // expect(serverRequests[0].bidRequest[objKey]).to.have.lengthOf(10);
+            expect(serverRequests[0].bidRequest).to.have.lengthOf(10);
           });
 
           it('should not group bid requests if singleRequest does not equal true', () => {
