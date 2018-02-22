@@ -1,6 +1,7 @@
 import * as utils from 'src/utils';
 import { registerBidder } from 'src/adapters/bidderFactory';
 import { config } from 'src/config';
+import {BANNER, VIDEO} from 'src/mediaTypes';
 
 const INTEGRATION = 'pbjs_lite_v$prebid.version$';
 
@@ -73,7 +74,7 @@ utils._each(sizeMap, (item, key) => sizeMap[item] = key);
 export const spec = {
   code: 'rubicon',
   aliases: ['rubiconLite'],
-  supportedMediaTypes: ['banner', 'video'],
+  supportedMediaTypes: [BANNER, VIDEO],
   /**
    * @param {object} bid
    * @return boolean
@@ -93,8 +94,10 @@ export const spec = {
       return false;
     }
 
-    if (bid.mediaType === 'video') {
-      if (typeof params.video !== 'object' || !params.video.size_id) {
+    if (spec.hasVideoMediaType(bid)) {
+      // support instream only
+      if (utils.deepAccess(bid, `mediaTypes.${VIDEO}.context`) !== 'instream' ||
+        typeof params.video !== 'object' || !params.video.size_id) {
         return false;
       }
     }
@@ -109,7 +112,7 @@ export const spec = {
   buildRequests: function(bidRequests, bidderRequest) {
     // separate video bids because the requests are structured differently
     let requests = [];
-    const videoRequests = bidRequests.filter(bidRequest => bidRequest.mediaType === 'video').map(bidRequest => {
+    const videoRequests = bidRequests.filter(spec.hasVideoMediaType).map(bidRequest => {
       bidRequest.startTime = new Date().getTime();
 
       let params = bidRequest.params;
@@ -165,7 +168,7 @@ export const spec = {
 
     if (config.getConfig('rubicon.singleRequest') !== true) {
       // bids are not grouped if single request mode is not enabled
-      requests = videoRequests.concat(bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video').map(bidRequest => {
+      requests = videoRequests.concat(bidRequests.filter(bidRequest => !spec.hasVideoMediaType(bidRequest)).map(bidRequest => {
         const bidParams = spec.createSlotParams(bidRequest);
         return {
           method: 'GET',
@@ -180,7 +183,7 @@ export const spec = {
     } else {
       // single request requires bids to be grouped by site id into a single request
       // note: utils.groupBy wasn't used because deep property access was needed
-      const nonVideoRequests = bidRequests.filter(bidRequest => bidRequest.mediaType !== 'video');
+      const nonVideoRequests = bidRequests.filter(bidRequest => !spec.hasVideoMediaType(bidRequest));
       const groupedBidRequests = nonVideoRequests.reduce((groupedBids, bid) => {
         (groupedBids[bid.params['siteId']] = groupedBids[bid.params['siteId']] || []).push(bid);
         return groupedBids;
@@ -205,7 +208,7 @@ export const spec = {
             const propValue = combinedSlotParams[key];
             return ((utils.isStr(propValue) && propValue !== '') || utils.isNumber(propValue)) ? `${paramString}${key}=${encodeURIComponent(propValue)}&` : paramString;
           }, '') + `slots=${bidsInGroup.length}&rand=${Math.random()}`,
-          bidRequest: groupedBidRequests[bidGroupKey],
+          bidRequest: bidsInGroup,
         };
       }));
     }
@@ -306,13 +309,23 @@ export const spec = {
   },
 
   /**
+   * Test if bid has mediaType or mediaTypes set for video.
+   * note: 'mediaType' has been deprecated, however support will remain for a transitional period
+   * @param {BidRequest} bidRequest
+   * @returns {boolean}
+   */
+  hasVideoMediaType: function(bidRequest) {
+    return bidRequest.mediaType === VIDEO || typeof utils.deepAccess(bidRequest, `mediaTypes.${VIDEO}`) !== 'undefined';
+  },
+
+  /**
    * @param {*} responseObj
    * @param {BidRequest|Object.<string, BidRequest[]>} bidRequest - if request was SRA the bidRequest argument will be a keyed BidRequest array object,
    * non-SRA responses return a plain BidRequest object
    * @return {Bid[]} An array of bids which
    */
   interpretResponse: function(responseObj, {bidRequest}) {
-    responseObj = responseObj.body
+    responseObj = responseObj.body;
     let ads = responseObj.ads;
 
     // check overall response
@@ -321,7 +334,7 @@ export const spec = {
     }
 
     // video ads array is wrapped in an object
-    if (typeof bidRequest === 'object' && !Array.isArray(bidRequest) && bidRequest.mediaType === 'video' && typeof ads === 'object') {
+    if (typeof bidRequest === 'object' && !Array.isArray(bidRequest) && spec.hasVideoMediaType(bidRequest) && typeof ads === 'object') {
       ads = ads[bidRequest.adUnitCode];
     }
 
@@ -338,7 +351,7 @@ export const spec = {
       // associate bidRequests under the assumption that response ads order matches request bids order
       const associatedBidRequest = Array.isArray(bidRequest) ? bidRequest[i] : bidRequest;
 
-      if (typeof associatedBidRequest !== 'undefined') {
+      if (associatedBidRequest && typeof associatedBidRequest === 'object') {
         let bid = {
           requestId: associatedBidRequest.bidId,
           currency: 'USD',
@@ -354,7 +367,7 @@ export const spec = {
           }
         };
 
-        if (associatedBidRequest.mediaType === 'video') {
+        if (ad.creative_type === VIDEO) {
           bid.width = associatedBidRequest.params.video.playerWidth;
           bid.height = associatedBidRequest.params.video.playerHeight;
           bid.vastUrl = ad.creative_depot_url;
@@ -373,6 +386,8 @@ export const spec = {
           }, {'rpfl_elemid': associatedBidRequest.adUnitCode});
 
         bids.push(bid);
+      } else {
+        utils.logError(`bidRequest undefined at index position:${i}`, bidRequest, responseObj);
       }
 
       return bids;
@@ -440,7 +455,8 @@ function _renderCreative(script, impId) {
 
 function parseSizes(bid) {
   let params = bid.params;
-  if (bid.mediaType === 'video') {
+
+  if (spec.hasVideoMediaType(bid)) {
     let size = [];
     if (params.video.playerWidth && params.video.playerHeight) {
       size = [
