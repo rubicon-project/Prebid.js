@@ -342,9 +342,9 @@ export const spec = {
       return [];
     }
 
-    // validate response ads length with request bids length
-    if ((Array.isArray(bidRequest) && ads.length !== bidRequest.length)) {
-      console.log('Error: bid request count not equal to response ads count');
+    // check that lengths are the same for 'ads' and 'bidRequests'
+    if (Array.isArray(bidRequest) && ads.length !== bidRequest.length) {
+      utils.logError('Error: requested bids length does not match the ads length', bidRequest, ads);
       return [];
     }
 
@@ -353,15 +353,16 @@ export const spec = {
         return bids;
       }
 
-      // associate bidRequests under the assumption that response ads order matches request bids order
+      // associate bidRequests; assuming ads matches bidRequest
       const associatedBidRequest = Array.isArray(bidRequest) ? bidRequest[i] : bidRequest;
 
       if (associatedBidRequest && typeof associatedBidRequest === 'object') {
-
-        // validate response ads order alignment with bidRequest order
-        if (Array.isArray(bidRequest) && typeof ad.zone_id === 'number' && associatedBidRequest.params.zoneId !== ad.zone_id) {
-          console.log(`Error: bidRequest[${i}].zoneId does not match ads[${i}].zone_id`, associatedBidRequest.params.zoneId, ad);
-          return bids;
+        // If single request mode is enabled, bidRequest should be an Array
+        if (Array.isArray(bidRequest)) {
+          if (typeof ad.zone_id !== 'undefined' && associatedBidRequest.params.zoneId !== ad.zone_id.toString()) {
+            utils.logError(`Error, 'bidRequest.zoneId:${associatedBidRequest.params.zoneId}' does not match 'ad.zone_id:${ad.zone_id}'`, bidRequest, ad);
+            return bids;
+          }
         }
 
         let bid = {
