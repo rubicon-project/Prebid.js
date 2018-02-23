@@ -13,7 +13,118 @@ const INTEGRATION = `pbjs_lite_v$prebid.version$`; // $prebid.version$ will be s
 
 describe('the rubicon adapter', () => {
   let sandbox,
-    bidderRequest;
+    bidderRequest,
+    sizeMap;
+
+  /**
+   * @typedef {Object} sizeMapConverted
+   * @property {string} sizeId
+   * @property {string} size
+   * @property {Array.<Array>} sizeAsArray
+   * @property {number} width
+   * @property {number} height
+   */
+
+  /**
+   * @param {Array.<sizeMapConverted>} sizesMapConverted
+   * @param {Object} bid
+   * @return {sizeMapConverted}
+   */
+  function getSizeIdForBid(sizesMapConverted, bid) {
+    return sizesMapConverted.find(item => (item.width === bid.width && item.height === bid.height));
+  }
+
+  /**
+   * @param {Array.<Object>} ads
+   * @param {sizeMapConverted} size
+   * @return {Object}
+   */
+  function getResponseAdBySize(ads, size) {
+    return ads.find(item => item.size_id === size.sizeId);
+  }
+
+  /**
+   * @param {Array.<BidRequest>} bidRequests
+   * @param {sizeMapConverted} size
+   * @return {BidRequest}
+   */
+  function getBidRequestBySize(bidRequests, size) {
+    return bidRequests.find(item => item.sizes[0][0] === size.width && item.sizes[0][1] === size.height);
+  }
+
+  /**
+   * @typedef {Object} overrideProps
+   * @property {string} status
+   * @property {number} cpm
+   * @property {number} zone_id
+   * @property {number} ad_id
+   * @property {string} creative_id
+   * @property {string} targeting_key - rpfl_{id}
+   */
+  /**
+   * @param {number} i - index
+   * @param {string} sizeId - id that maps to size
+   * @param {Array.<overrideProps>} [indexOverMap]
+   * @return {{status: string, cpm: number, zone_id: *, size_id: *, impression_id: *, ad_id: *, creative_id: string, type: string, targeting: *[]}}
+   */
+  function createResponseAdByIndex(i, sizeId, indexOverMap) {
+    const overridePropMap = (indexOverMap && indexOverMap[i] && typeof indexOverMap[i] === 'object') ? indexOverMap[i] : {};
+    const overrideProps = Object.keys(overridePropMap).reduce((aggregate, key) => {
+      aggregate[key] = overridePropMap[key];
+      return aggregate;
+    }, {});
+
+    const getProp = (propName, defaultValue) => {
+      return (overrideProps[propName]) ? overridePropMap[propName] : defaultValue;
+    };
+
+    return {
+      'status': getProp('status', 'ok'),
+      'cpm': getProp('cpm', i/100),
+      'zone_id': getProp('zone_id', i+1),
+      'size_id': sizeId,
+      'impression_id': i+1,
+      'ad_id': getProp('ad_id', i+1),
+      'advertiser': i+1,
+      'network': i+1,
+      'creative_id': getProp('creative_id', `crid-${i}`),
+      'type': 'script',
+      'script': 'alert(\'foo\')',
+      'campaign_id': i+1,
+      'targeting': [
+        {
+          'key': getProp('targeting_key', `rpfl_${i}`),
+          'values': [ '43_tier_all_test' ]
+        }
+      ]
+    };
+  }
+
+  /**
+   * @param {number} i
+   * @param {Array.<Array>} size
+   * @return {{ params: {accountId: string, siteId: string, zoneId: string }, adUnitCode: string, code: string, sizes: *[], bidId: string, bidderRequestId: string }}
+   */
+  function createBidRequestByIndex(i, size) {
+    return {
+      bidder: 'rubicon',
+      params: {
+        accountId: '14062',
+        siteId: '70608',
+        zoneId: (i+1).toString(),
+        userId: '12346',
+        position: 'atf',
+        referrer: 'localhost'
+      },
+      adUnitCode: `/19968336/header-bid-tag-${i}`,
+      code: `div-${i}`,
+      sizes: [size],
+      bidId: i.toString(),
+      bidderRequestId: i.toString(),
+      auctionId: 'c45dd708-a418-42ec-b8a7-b70a6c6fab0a',
+      transactionId: 'd45dd707-a418-42ec-b8a7-b70a6c6fab0b'
+    };
+  }
 
   function createVideoBidderRequest() {
     let bid = bidderRequest.bids[0];
@@ -170,6 +281,32 @@ describe('the rubicon adapter', () => {
       auctionStart: 1472239426000,
       timeout: 5000
     };
+
+    sizeMap = [
+      {sizeId:1, size: '468x60'},
+      {sizeId:2, size: '728x90'},
+      {sizeId:5, size: '120x90'},
+      {sizeId:8, size: '120x600'},
+      {sizeId:9, size: '160x600'},
+      {sizeId:10, size: '300x600'},
+      {sizeId:13, size: '200x200'},
+      {sizeId:14, size: '250x250'},
+      {sizeId:15, size: '300x250'},
+      {sizeId:16, size: '336x280'},
+      {sizeId:19, size: '300x100'},
+      {sizeId:31, size: '980x120'},
+      {sizeId:32, size: '250x360'}
+      // Create convenience properties for [sizeAsArray, width, height] by parsing the size string
+    ].map(item => {
+      const sizeAsArray = item.size.split('x').map(s => parseInt(s));
+      return {
+        sizeId: item.sizeId,
+        size: item.size,
+        sizeAsArray: sizeAsArray.slice(),
+        width: sizeAsArray[0],
+        height: sizeAsArray[1]
+      };
+    });
   });
 
   afterEach(() => {
@@ -579,14 +716,15 @@ describe('the rubicon adapter', () => {
             const serverRequests = spec.buildRequests(bidderRequest.bids, bidderRequest);
 
             // array length should match the num of unique 'siteIds'
-            expect(serverRequests).to.be.an('array').to.have.lengthOf(2);
+            expect(serverRequests).to.be.a('array');
+            expect(serverRequests).to.have.lengthOf(2);
 
             // collect all bidRequests so order can be checked against the url param slot order
             const bidRequests = serverRequests.reduce((aggregator, item) => aggregator.concat(item.bidRequest), []);
             let bidRequestIndex = 0;
 
             serverRequests.forEach(item => {
-              expect(item).to.be.an('object');
+              expect(item).to.be.a('object');
               expect(item).to.have.property('method');
               expect(item).to.have.property('url');
               expect(item).to.have.property('data');
@@ -594,13 +732,13 @@ describe('the rubicon adapter', () => {
 
               expect(item.method).to.equal('GET');
               expect(item.url).to.equal('//fastlane.rubiconproject.com/a/api/fastlane.json');
-              expect(item.data).to.be.an('string');
+              expect(item.data).to.be.a('string');
 
               // 'bidRequest' type must be 'array' if SRA enabled
-              expect(item.bidRequest).to.be.an('array').to.have.lengthOf(2);
+              expect(item.bidRequest).to.be.a('array').to.have.lengthOf(2);
 
               item.bidRequest.forEach((bidRequestItem, i, array) => {
-                expect(bidRequestItem).to.be.an('object');
+                expect(bidRequestItem).to.be.a('object');
                 // every 'siteId' values need to match
                 expect(bidRequestItem.params.siteId).to.equal(array[0].params.siteId);
               });
@@ -628,8 +766,8 @@ describe('the rubicon adapter', () => {
                 // check parsed url data list order with requestBid list, items must have same index in both lists
                 if (key === 'zone_id') {
                   params.forEach((p) => {
-                    expect(bidRequests[bidRequestIndex]).to.be.an('object');
-                    expect(bidRequests[bidRequestIndex].params).to.be.an('object');
+                    expect(bidRequests[bidRequestIndex]).to.be.a('object');
+                    expect(bidRequests[bidRequestIndex].params).to.be.a('object');
 
                     // 'zone_id' is used to verify so each bid must have a unique 'zone_id'
                     expect(p).to.equal(bidRequests[bidRequestIndex].params.zoneId);
@@ -667,7 +805,8 @@ describe('the rubicon adapter', () => {
 
             // check that zone_id has 10 values (since all zone_ids are unique all should exist in get param)
             const data = parseQuery(serverRequests[0].data);
-            expect(data).to.be.an('object');
+
+            expect(data).to.be.a('object');
             expect(data).to.have.property('zone_id');
             expect(data.zone_id.split(';')).to.have.lengthOf(10);
           });
@@ -1258,86 +1397,150 @@ describe('the rubicon adapter', () => {
           };
 
           let bids = spec.interpretResponse({ body: response }, {
-            bidRequest: [bidderRequest.bids[0]]
+            bidRequest: [clone(bidderRequest.bids[0])]
           });
 
           expect(bids).to.be.lengthOf(1);
           expect(bids[0].cpm).to.be.equal(0);
         });
 
-        it('should handle a matching/combining adUnits with an Array of bidRequests (when singleRequest=true)', () => {
-          const sizes = [
-            {sizeId:1, size: '468x60'},
-            {sizeId:2, size: '728x90'},
-            {sizeId:5, size: '120x90'},
-            {sizeId:8, size: '120x600'},
-            {sizeId:9, size: '160x600'},
-            {sizeId:10, size: '300x600'},
-            {sizeId:13, size: '200x200'},
-            {sizeId:14, size: '250x250'},
-            {sizeId:15, size: '300x250'},
-            {sizeId:16, size: '336x280'}
-          ];
-
-          // response ads
-          const stubAds = [];
-          for (let i = 0; i < 10; i++) {
-            stubAds.push({
-              'status': 'ok',
-              'cpm': `0.${i}0`,
-              'zone_id': `${i+1}00`,
-              'size_id': sizes[i].sizeId,
-              'impression_id': `${(i+1)*Number.MAX_VALUE}`,
-              'ad_id': `${i+1}00`,
-              'advertiser': `${i+1}`,
-              'network': `${i+1}`,
-              'creative_id': `crid-${i}`,
-              'type': 'script',
-              'script': 'alert(\'foo\')',
-              'campaign_id': `${i+1}`,
-              'targeting': [
-                {
-                  'key': `rpfl_14062${i}`,
-                  'values': [
-                    '43_tier_all_test'
-                  ]
-                }
-              ]
-            });
-          }
-
-          // bidRequests
-          for (let i = 0; i < 10; i++) {
-            const bidCopy = clone(bidderRequest.bids[0]);
-            bidCopy.params.zoneId = `${i+1}00`;
-            bidCopy.sizes = [sizes[sizes[i].size.split(';')]];
-            bidderRequest.bids.push(bidCopy);
-          }
-
-          const bids = spec.interpretResponse({
-            body: {
-              'status': 'ok',
-              'site_id': '1100',
-              'account_id': 14062,
-              'zone_id': 2100,
-              'size_id': '1',
-              'tracking': '',
-              'inventory': {},
-              'ads': stubAds
+        describe('singleRequest enabled', () => {
+          it('uses bidRequests of type Array to returns valid adUnits', () => {
+            const stubAds = [];
+            for (let i = 0; i < 10; i++) {
+              stubAds.push(createResponseAdByIndex(i, sizeMap[i].sizeId));
             }
-          }, {
-            bidRequest: bidderRequest.bids
+
+            const stubBids = [];
+            for (let i = 0; i < 10; i++) {
+              stubBids.push(createBidRequestByIndex(i, sizeMap[i].sizeAsArray.slice()));
+            }
+
+            const bids = spec.interpretResponse({
+              body: {
+                'status': 'ok',
+                'site_id': '1100',
+                'account_id': 14062,
+                'zone_id': 2100,
+                'size_id': '1',
+                'tracking': '',
+                'inventory': {},
+                'ads': stubAds
+              }}, { bidRequest: stubBids });
+            expect(bids).to.be.a('array').with.lengthOf(10);
+
+            bids.forEach((bid) => {
+              expect(bid).to.be.a('object');
+              expect(bid).to.have.property('cpm').that.is.a('number');
+              expect(bid).to.have.property('width').that.is.a('number');
+              expect(bid).to.have.property('height').that.is.a('number');
+
+              // verify that result bid 'sizeId' links to a size from the sizeMap
+              const size = getSizeIdForBid(sizeMap, bid);
+              expect(size).to.be.a('object');
+
+              // use 'size' to verify that result bid links to the 'response.ad' passed to function
+              const associateAd = getResponseAdBySize(stubAds, size);
+              expect(associateAd).to.be.a('object');
+              expect(associateAd).to.have.property('creative_id').that.is.a('string');
+
+              // use 'size' to verify that result bid links to the 'bidRequest' passed to function
+              const associateBidRequest = getBidRequestBySize(stubBids, size);
+              expect(associateBidRequest).to.be.a('object');
+              expect(associateBidRequest).to.have.property('bidId').that.is.a('string');
+
+              // verify all bid properties set using 'ad' and 'bidRequest' match
+              // 'ad.creative_id === bid.creativeId'
+              expect(bid.requestId).to.equal(associateBidRequest.bidId);
+              // 'bid.requestId === bidRequest.bidId'
+              expect(bid.creativeId).to.equal(associateAd.creative_id);
+            });
           });
 
-          expect(bids).to.be.lengthOf(10);
+          it('handles incorrect adUnits length by returning an empty array', () => {
+            const stubAds = [];
+            for (let i = 0; i < 12; i++) {
+              stubAds.push(createResponseAdByIndex(i, sizeMap[i].sizeId));
+            }
 
-          // order is sorted according to CPM, so the size order should be reversed
-          const sortedAdSizes = sizes.slice().reverse();
+            const stubBids = [];
+            for (let i = 0; i < 10; i++) {
+              stubBids.push(createBidRequestByIndex(i, sizeMap[i].sizeAsArray.slice()));
+            }
 
-          bids.forEach((bid, i) => {
-            const size = sortedAdSizes[i].size.split('x');
-            expect(bid.width).to.equal(parseFloat(size[0]));
-            expect(bid.height).to.equal(parseFloat(size[1]));
+            const bids = spec.interpretResponse({
+              body: {
+                'status': 'ok',
+                'site_id': '1100',
+                'account_id': 14062,
+                'zone_id': 2100,
+                'size_id': '1',
+                'tracking': '',
+                'inventory': {},
+                'ads': stubAds
+              }}, { bidRequest: stubBids });
+            // no bids expected because response didn't match requested bid number
+            expect(bids).to.be.a('array').with.lengthOf(0);
+          });
+
+          it('handles errors by skipping adUnits with errors, but continues processing and returns valid results', () => {
+            const stubAds = [];
+            // Create overrides to break associations between bids and ads
+            // Each override should cause one less bid to be returned by interpretResponse
+            const overrideMap = [];
+            overrideMap[2] = { zone_id: 56 };
+            overrideMap[4] = { status: 'error' };
+            overrideMap[7] = { status: 'error', zone_id: 56 };
+            overrideMap[8] = { status: 'error' };
+
+            for (let i = 0; i < 10; i++) {
+              stubAds.push(createResponseAdByIndex(i, sizeMap[i].sizeId, overrideMap));
+            }
+
+            const stubBids = [];
+            for (let i = 0; i < 10; i++) {
+              stubBids.push(createBidRequestByIndex(i, sizeMap[i].sizeAsArray.slice()));
+            }
+
+            const bids = spec.interpretResponse({
+              body: {
+                'status': 'ok',
+                'site_id': '1100',
+                'account_id': 14062,
+                'zone_id': 2100,
+                'size_id': '1',
+                'tracking': '',
+                'inventory': {},
+                'ads': stubAds
+              }}, { bidRequest: stubBids });
+            expect(bids).to.be.a('array').with.lengthOf(6);
+
+            bids.forEach((bid) => {
+              expect(bid).to.be.a('object');
+              expect(bid).to.have.property('cpm').that.is.a('number');
+              expect(bid).to.have.property('width').that.is.a('number');
+              expect(bid).to.have.property('height').that.is.a('number');
+
+              // verify that result bid 'sizeId' links to a size from the sizeMap
+              const size = getSizeIdForBid(sizeMap, bid);
+              expect(size).to.be.a('object');
+
+              // use 'size' to verify that result bid links to the 'response.ad' passed to function
+              const associateAd = getResponseAdBySize(stubAds, size);
+              expect(associateAd).to.be.a('object');
+              expect(associateAd).to.have.property('creative_id').that.is.a('string');
+
+              // use 'size' to verify that result bid links to the 'bidRequest' passed to function
+              const associateBidRequest = getBidRequestBySize(stubBids, size);
+              expect(associateBidRequest).to.be.a('object');
+              expect(associateBidRequest).to.have.property('bidId').that.is.a('string');
+
+              // verify all bid properties set using 'ad' and 'bidRequest' match
+              // 'ad.creative_id === bid.creativeId'
+              expect(bid.requestId).to.equal(associateBidRequest.bidId);
+              // 'bid.requestId === bidRequest.bidId'
+              expect(bid.creativeId).to.equal(associateAd.creative_id);
+            });
           });
         });
       });
