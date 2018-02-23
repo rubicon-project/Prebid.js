@@ -579,14 +579,15 @@ describe('the rubicon adapter', () => {
             const serverRequests = spec.buildRequests(bidderRequest.bids, bidderRequest);
 
             // array length should match the num of unique 'siteIds'
-            expect(serverRequests).to.be.an('array').to.have.lengthOf(2);
+            expect(serverRequests).to.be.a('array');
+            expect(serverRequests).to.have.lengthOf(2);
 
             // collect all bidRequests so order can be checked against the url param slot order
             const bidRequests = serverRequests.reduce((aggregator, item) => aggregator.concat(item.bidRequest), []);
             let bidRequestIndex = 0;
 
             serverRequests.forEach(item => {
-              expect(item).to.be.an('object');
+              expect(item).to.be.a('object');
               expect(item).to.have.property('method');
               expect(item).to.have.property('url');
               expect(item).to.have.property('data');
@@ -594,13 +595,13 @@ describe('the rubicon adapter', () => {
 
               expect(item.method).to.equal('GET');
               expect(item.url).to.equal('//fastlane.rubiconproject.com/a/api/fastlane.json');
-              expect(item.data).to.be.an('string');
+              expect(item.data).to.be.a('string');
 
               // 'bidRequest' type must be 'array' if SRA enabled
-              expect(item.bidRequest).to.be.an('array').to.have.lengthOf(2);
+              expect(item.bidRequest).to.be.a('array').to.have.lengthOf(2);
 
               item.bidRequest.forEach((bidRequestItem, i, array) => {
-                expect(bidRequestItem).to.be.an('object');
+                expect(bidRequestItem).to.be.a('object');
                 // every 'siteId' values need to match
                 expect(bidRequestItem.params.siteId).to.equal(array[0].params.siteId);
               });
@@ -628,8 +629,8 @@ describe('the rubicon adapter', () => {
                 // check parsed url data list order with requestBid list, items must have same index in both lists
                 if (key === 'zone_id') {
                   params.forEach((p) => {
-                    expect(bidRequests[bidRequestIndex]).to.be.an('object');
-                    expect(bidRequests[bidRequestIndex].params).to.be.an('object');
+                    expect(bidRequests[bidRequestIndex]).to.be.a('object');
+                    expect(bidRequests[bidRequestIndex].params).to.be.a('object');
 
                     // 'zone_id' is used to verify so each bid must have a unique 'zone_id'
                     expect(p).to.equal(bidRequests[bidRequestIndex].params.zoneId);
@@ -667,7 +668,8 @@ describe('the rubicon adapter', () => {
 
             // check that zone_id has 10 values (since all zone_ids are unique all should exist in get param)
             const data = parseQuery(serverRequests[0].data);
-            expect(data).to.be.an('object');
+
+            expect(data).to.be.a('object');
             expect(data).to.have.property('zone_id');
             expect(data.zone_id.split(';')).to.have.lengthOf(10);
           });
@@ -1265,79 +1267,220 @@ describe('the rubicon adapter', () => {
           expect(bids[0].cpm).to.be.equal(0);
         });
 
-        it('should handle a matching/combining adUnits with an Array of bidRequests (when singleRequest=true)', () => {
-          const sizes = [
-            {sizeId:1, size: '468x60'},
-            {sizeId:2, size: '728x90'},
-            {sizeId:5, size: '120x90'},
-            {sizeId:8, size: '120x600'},
-            {sizeId:9, size: '160x600'},
-            {sizeId:10, size: '300x600'},
-            {sizeId:13, size: '200x200'},
-            {sizeId:14, size: '250x250'},
-            {sizeId:15, size: '300x250'},
-            {sizeId:16, size: '336x280'}
-          ];
+        describe('singleRequest enabled', () => {
+          it('matching/combining adUnits adUnits', () => {
+            const sizes = [
+              {sizeId:1, size: '468x60'},
+              {sizeId:2, size: '728x90'},
+              {sizeId:5, size: '120x90'},
+              {sizeId:8, size: '120x600'},
+              {sizeId:9, size: '160x600'},
+              {sizeId:10, size: '300x600'},
+              {sizeId:13, size: '200x200'},
+              {sizeId:14, size: '250x250'},
+              {sizeId:15, size: '300x250'},
+              {sizeId:16, size: '336x280'}
+            ];
 
-          // response ads
-          const stubAds = [];
-          for (let i = 0; i < 10; i++) {
-            stubAds.push({
-              'status': 'ok',
-              'cpm': `0.${i}0`,
-              'zone_id': `${i+1}00`,
-              'size_id': sizes[i].sizeId,
-              'impression_id': `${(i+1)*Number.MAX_VALUE}`,
-              'ad_id': `${i+1}00`,
-              'advertiser': `${i+1}`,
-              'network': `${i+1}`,
-              'creative_id': `crid-${i}`,
-              'type': 'script',
-              'script': 'alert(\'foo\')',
-              'campaign_id': `${i+1}`,
-              'targeting': [
-                {
-                  'key': `rpfl_14062${i}`,
-                  'values': [
-                    '43_tier_all_test'
-                  ]
-                }
-              ]
-            });
-          }
-
-          // bidRequests
-          for (let i = 0; i < 10; i++) {
-            const bidCopy = clone(bidderRequest.bids[0]);
-            bidCopy.params.zoneId = `${i+1}00`;
-            bidCopy.sizes = [sizes[sizes[i].size.split(';')]];
-            bidderRequest.bids.push(bidCopy);
-          }
-
-          const bids = spec.interpretResponse({
-            body: {
-              'status': 'ok',
-              'site_id': '1100',
-              'account_id': 14062,
-              'zone_id': 2100,
-              'size_id': '1',
-              'tracking': '',
-              'inventory': {},
-              'ads': stubAds
+            // response ads
+            const stubAds = [];
+            for (let i = 0; i < 10; i++) {
+              stubAds.push({
+                'status': 'ok',
+                'cpm': `0.${i}0`,
+                'zone_id': `${i+1}00`,
+                'size_id': sizes[i].sizeId,
+                'impression_id': `${(i+1)*1e10}`,
+                'ad_id': `${i+1}00`,
+                'advertiser': `${i+1}`,
+                'network': `${i+1}`,
+                'creative_id': `crid-${i}`,
+                'type': 'script',
+                'script': 'alert(\'foo\')',
+                'campaign_id': `${i+1}`,
+                'targeting': [
+                  {
+                    'key': `rpfl_14062${i}`,
+                    'values': [
+                      '43_tier_all_test'
+                    ]
+                  }
+                ]
+              });
             }
-          }, {
-            bidRequest: bidderRequest.bids
+
+            // bidRequests
+            const stubBids = [];
+            for (let i = 0; i < 10; i++) {
+              const bidCopy = clone(bidderRequest.bids[0]);
+              bidCopy.params.zoneId = `${i+1}00`;
+              bidCopy.sizes = [sizes[sizes[i].size.split('x')]];
+              stubBids.push(bidCopy);
+            }
+
+            const bids = spec.interpretResponse({
+              body: {
+                'status': 'ok',
+                'site_id': '1100',
+                'account_id': 14062,
+                'zone_id': 2100,
+                'size_id': '1',
+                'tracking': '',
+                'inventory': {},
+                'ads': stubAds
+              }}, { bidRequest: stubBids });
+
+            expect(bids).to.be.a('array').with.lengthOf(10);
+
+            // order is sorted according to CPM, so the size order should be reversed
+            const sortedAdSizes = sizes.slice().reverse();
+
+            bids.forEach((bid, i) => {
+              const size = sortedAdSizes[i].size.split('x');
+
+              expect(bid).to.be.a('object');//with.property('width').and.property('height');
+
+              expect(bid).to.have.property('width').that.is.a('number');
+              expect(bid).to.have.property('height').that.is.a('number');
+
+              expect(bid.width).to.equal(parseFloat(size[0]));
+              expect(bid.height).to.equal(parseFloat(size[1]));
+            });
           });
 
-          expect(bids).to.be.lengthOf(10);
+          it('matching/combining adUnits with errors', () => {
+            const sizes = [
+              {sizeId:1, size: '468x60'},
+              {sizeId:2, size: '728x90'},
+              {sizeId:5, size: '120x90'},
+              {sizeId:8, size: '120x600'},
+              {sizeId:9, size: '160x600'},
+              {sizeId:10, size: '300x600'},
+              {sizeId:13, size: '200x200'},
+              {sizeId:14, size: '250x250'},
+              {sizeId:15, size: '300x250'},
+              {sizeId:16, size: '336x280'}
+            ];
+            const stubAdErrorPositions = [
+              1,4,6,7,9
+            ];
 
-          // order is sorted according to CPM, so the size order should be reversed
-          const sortedAdSizes = sizes.slice().reverse();
+            const bidTemplate = {
+              bidder: 'rubicon',
+              params: {
+                accountId: '14062',
+                siteId: '70608',
+                zoneId: '335918',
+                userId: '12346',
+                keywords: ['a', 'b', 'c'],
+                inventory: {
+                  rating: '5-star',
+                  prodtype: 'tech'
+                },
+                visitor: {
+                  ucat: 'new',
+                  lastsearch: 'iphone'
+                },
+                position: 'atf',
+                referrer: 'localhost'
+              },
+              adUnitCode: '/19968336/header-bid-tag-0',
+              code: 'div-1',
+              sizes: [[300, 250], [320, 50]],
+              bidId: '2ffb201a808da7',
+              bidderRequestId: '178e34bad3658f',
+              auctionId: 'c45dd708-a418-42ec-b8a7-b70a6c6fab0a',
+              transactionId: 'd45dd707-a418-42ec-b8a7-b70a6c6fab0b'
+            };
 
-          bids.forEach((bid, i) => {
-            const size = sortedAdSizes[i].size.split('x');
-            expect(bid.width).to.equal(parseFloat(size[0]));
-            expect(bid.height).to.equal(parseFloat(size[1]));
+            // response.body.ads
+            const stubAds = [];
+            for (let i = 0; i < 10; i++) {
+
+              const status = (stubAdErrorPositions.indexOf(i) === -1) ? 'ok' : 'error';
+
+              const zoneId = (i !== 3) ? (i+1) : (i+20);
+
+              stubAds.push({
+                'status': status,
+                'cpm': (i+1)/100,
+                'zone_id': zoneId,
+                'size_id': sizes[i].sizeId,
+                'impression_id': i*1e10,
+                'ad_id': i+1e2,
+                'advertiser': `${i+1}`,
+                'network': `${i+1}`,
+                'creative_id': `crid-${i}`,
+                'type': 'script',
+                'script': 'alert(\'foo\')',
+                'campaign_id': `${i+1}`,
+                'targeting': [
+                  {
+                    'key': `rpfl_14062${i}`,
+                    'values': [
+                      '43_tier_all_test'
+                    ]
+                  }
+                ]
+              });
+            }
+
+            // bidRequests
+            const stubBids = [];
+            for (let i = 0; i < 10; i++) {
+              let bidCopy = clone(bidTemplate);
+              bidCopy.bidId = i;
+              bidCopy.bidderRequestId = i;
+              bidCopy.code = `div-${i}`;
+              bidCopy.adUnitCode = `/19968336/header-bid-tag-${i}`;
+              bidCopy.sizes = [sizes[i].size.split('x').map(s => parseInt(s))];
+              bidCopy.params.zoneId = i+1;
+              stubBids.push(bidCopy);
+            }
+
+            const bids = spec.interpretResponse({
+              body: {
+                'status': 'ok',
+                'site_id': '1100',
+                'account_id': 14062,
+                'zone_id': 2100,
+                'size_id': '1',
+                'tracking': '',
+                'inventory': {},
+                'ads': stubAds
+              }}, { bidRequest: stubBids });
+
+            expect(bids).to.be.a('array').with.lengthOf(4);
+
+            function getSizeIdForWidthAndHeight(sizeList, width, height) {
+              return sizeList.find(size => {
+                const extractedSize = size.size.split('x').map(s => parseFloat(s));
+                return (extractedSize[0] === width && extractedSize[1] === height);
+              });
+            }
+
+            bids.forEach((bid) => {
+              expect(bid).to.be.a('object');
+              expect(bid).to.have.property('cpm').that.is.a('number');
+              expect(bid).to.have.property('width').that.is.a('number');
+              expect(bid).to.have.property('height').that.is.a('number');
+
+              const size = getSizeIdForWidthAndHeight(sizes, bid.width, bid.height);
+              if (size) {
+                const parsedSize = size.size.split('x').map(s => parseInt(s));
+                const associatedAd = stubAds.find(ad => ad.size_id === size.sizeId);
+
+                const associatedBid = stubBids.find(sb => sb.sizes[0][0] === parsedSize[0] && sb.sizes[0][1] === parsedSize[1]);
+
+                console.log('associatedAd.creative_id:', associatedAd.creative_id);
+                console.log('associatedBid.bidId:', associatedBid.bidId);
+
+                expect(bid.requestId).to.equal(associatedBid.bidId);
+                expect(bid.creativeId).to.equal(associatedAd.creative_id);
+              }
+
+              console.log('bid.cpm:', bid.cpm, ' bidId', bid.requestId, 'creative_id', bid.creativeId);
+            });
           });
         });
       });
