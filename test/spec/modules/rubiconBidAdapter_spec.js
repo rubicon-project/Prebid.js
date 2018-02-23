@@ -737,7 +737,7 @@ describe('the rubicon adapter', () => {
       });
 
       describe('for video requests', () => {
-        it('should make a well-formed video request using legacy mediaType config', () => {
+        it('should make a well-formed video request with legacy mediaType config', () => {
           createLegacyVideoBidderRequest();
 
           sandbox.stub(Date, 'now').callsFake(() =>
@@ -879,30 +879,51 @@ describe('the rubicon adapter', () => {
           expect(floor).to.equal(3.25);
         });
 
-        it('should not validate bid request when no video object is passed in', () => {
+        it('should not validate bid request when a invalid video object is passed in', () => {
           createVideoBidderRequestNoVideo();
           sandbox.stub(Date, 'now').callsFake(() =>
             bidderRequest.auctionStart + 100
           );
 
-          var floorBidderRequest = clone(bidderRequest);
+          const bidRequestCopy = clone(bidderRequest.bids[0]);
+          expect(spec.isBidRequestValid(bidRequestCopy)).to.equal(false);
 
-          let result = spec.isBidRequestValid(floorBidderRequest.bids[0]);
+          bidRequestCopy.params.video = {};
+          expect(spec.isBidRequestValid(bidRequestCopy)).to.equal(false);
 
-          expect(result).to.equal(false);
+          bidRequestCopy.params.video = undefined;
+          expect(spec.isBidRequestValid(bidRequestCopy)).to.equal(false);
+
+          bidRequestCopy.params.video = 123;
+          expect(spec.isBidRequestValid(bidRequestCopy)).to.equal(false);
+
+          bidRequestCopy.params.video = { size_id: '' };
+          expect(spec.isBidRequestValid(bidRequestCopy)).to.equal(false);
+
+          delete bidRequestCopy.params.video;
+          expect(spec.isBidRequestValid(bidRequestCopy)).to.equal(false);
         });
 
-        it('should not validate bid request when no video object is passed in using legacy config mediaType', () => {
+        it('should not validate bid request when an invalid video object is passed in with legacy config mediaType', () => {
           createLegacyVideoBidderRequestNoVideo();
           sandbox.stub(Date, 'now').callsFake(() =>
             bidderRequest.auctionStart + 100
           );
 
-          var floorBidderRequest = clone(bidderRequest);
+          const bidderRequestCopy = clone(bidderRequest);
+          expect(spec.isBidRequestValid(bidderRequestCopy.bids[0])).to.equal(false);
 
-          let result = spec.isBidRequestValid(floorBidderRequest.bids[0]);
+          bidderRequestCopy.bids[0].params.video = {};
+          expect(spec.isBidRequestValid(bidderRequestCopy.bids[0])).to.equal(false);
 
-          expect(result).to.equal(false);
+          bidderRequestCopy.bids[0].params.video = undefined;
+          expect(spec.isBidRequestValid(bidderRequestCopy.bids[0])).to.equal(false);
+
+          bidderRequestCopy.bids[0].params.video = NaN;
+          expect(spec.isBidRequestValid(bidderRequestCopy.bids[0])).to.equal(false);
+
+          delete bidderRequestCopy.bids[0].params.video;
+          expect(spec.isBidRequestValid(bidderRequestCopy.bids[0])).to.equal(false);
         });
 
         it('should not validate bid request when video is outstream', () => {
@@ -911,9 +932,7 @@ describe('the rubicon adapter', () => {
             bidderRequest.auctionStart + 100
           );
 
-          const result = spec.isBidRequestValid(clone(bidderRequest).bids[0]);
-
-          expect(result).to.equal(false);
+          expect(spec.isBidRequestValid(bidderRequest.bids[0])).to.equal(false);
         });
 
         it('should get size from bid.sizes too', () => {
@@ -922,13 +941,26 @@ describe('the rubicon adapter', () => {
             bidderRequest.auctionStart + 100
           );
 
-          var floorBidderRequest = clone(bidderRequest);
+          const bidRequestCopy = clone(bidderRequest);
 
-          let [request] = spec.buildRequests(floorBidderRequest.bids, floorBidderRequest);
-          let post = request.data;
+          let [request] = spec.buildRequests(bidRequestCopy.bids, bidRequestCopy);
 
-          expect(post.slots[0].width).to.equal(300);
-          expect(post.slots[0].height).to.equal(250);
+          expect(request.data.slots[0].width).to.equal(300);
+          expect(request.data.slots[0].height).to.equal(250);
+        });
+
+        it('should get size from bid.sizes too with legacy config mediaType', () => {
+          createLegacyVideoBidderRequestNoPlayer();
+          sandbox.stub(Date, 'now').callsFake(() =>
+            bidderRequest.auctionStart + 100
+          );
+
+          const bidRequestCopy = clone(bidderRequest);
+
+          let [request] = spec.buildRequests(bidRequestCopy.bids, bidRequestCopy);
+
+          expect(request.data.slots[0].width).to.equal(300);
+          expect(request.data.slots[0].height).to.equal(250);
         });
       });
 
