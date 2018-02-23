@@ -342,15 +342,28 @@ export const spec = {
       return [];
     }
 
+    // validate response ads length with request bids length
+    if ((Array.isArray(bidRequest) && ads.length !== bidRequest.length)) {
+      console.log('Error: bid request count not equal to response ads count');
+      return [];
+    }
+
     return ads.reduce((bids, ad, i) => {
       if (ad.status !== 'ok') {
-        return [];
+        return bids;
       }
 
       // associate bidRequests under the assumption that response ads order matches request bids order
       const associatedBidRequest = Array.isArray(bidRequest) ? bidRequest[i] : bidRequest;
 
       if (associatedBidRequest && typeof associatedBidRequest === 'object') {
+
+        // validate response ads order alignment with bidRequest order
+        if (Array.isArray(bidRequest) && typeof ad.zone_id === 'number' && associatedBidRequest.params.zoneId !== ad.zone_id) {
+          console.log(`Error: bidRequest[${i}].zoneId does not match ads[${i}].zone_id`, associatedBidRequest.params.zoneId, ad);
+          return bids;
+        }
+
         let bid = {
           requestId: associatedBidRequest.bidId,
           currency: 'USD',
