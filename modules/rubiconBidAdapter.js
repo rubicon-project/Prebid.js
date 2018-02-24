@@ -476,7 +476,10 @@ function parseSizes(bid) {
         params.video.playerWidth,
         params.video.playerHeight
       ];
-    } else if (Array.isArray(bid.sizes) && bid.sizes.length > 0 && Array.isArray(bid.sizes[0]) && bid.sizes[0].length > 1) {
+    } else if (
+      Array.isArray(bid.sizes) && bid.sizes.length > 0 &&
+        Array.isArray(bid.sizes[0]) && bid.sizes[0].length > 1
+    ) {
       size = bid.sizes[0];
     }
     return size;
@@ -489,7 +492,7 @@ function parseSizes(bid) {
 
 function mapSizes(sizes) {
   return utils.parseSizesInput(sizes)
-  // map sizes while excluding non-matches
+    // map sizes while excluding non-matches
     .reduce((result, size) => {
       let mappedSize = parseInt(sizeMap[size], 10);
       if (mappedSize) {
