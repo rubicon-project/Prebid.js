@@ -327,11 +327,6 @@ export const spec = {
     responseObj = responseObj.body;
     let ads = responseObj.ads;
 
-    // check overall response
-    if (typeof responseObj !== 'object' || responseObj.status !== 'ok') {
-      return [];
-    }
-
     // video ads array is wrapped in an object
     if (typeof bidRequest === 'object' && !Array.isArray(bidRequest) && spec.hasVideoMediaType(bidRequest) && typeof ads === 'object') {
       ads = ads[bidRequest.adUnitCode];
