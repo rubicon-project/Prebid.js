@@ -325,6 +325,12 @@ export const spec = {
    */
   interpretResponse: function(responseObj, {bidRequest}) {
     responseObj = responseObj.body;
+
+    // check overall response
+    if (!responseObj || typeof responseObj !== 'object') {
+      return [];
+    }
+
     let ads = responseObj.ads;
 
     // video ads array is wrapped in an object

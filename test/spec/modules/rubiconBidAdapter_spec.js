@@ -1512,7 +1512,7 @@ describe('the rubicon adapter', () => {
 
             const bids = spec.interpretResponse({
               body: {
-                'status': 'ok',
+                'status': 'error',
                 'site_id': '1100',
                 'account_id': 14062,
                 'zone_id': 2100,
