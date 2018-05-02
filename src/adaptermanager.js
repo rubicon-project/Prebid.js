@@ -1,7 +1,7 @@
 /** @module adaptermanger */
 
 import { flatten, getBidderCodes, getDefinedParams, shuffle, timestamp } from './utils';
-import { resolveStatus } from './sizeMapping';
+import { resolveStatus, resolveBidOverrideSizes } from './sizeMapping';
 import { processNativeAdUnitParams, nativeAdapters } from './native';
 import { newBidder } from './adapters/bidderFactory';
 import { ajaxBuilder } from 'src/ajax';
@@ -75,7 +75,10 @@ function getBids({bidderCode, auctionId, bidderRequestId, adUnits, labels}) {
             'renderer'
           ]));
 
-          let {active, sizes} = resolveStatus(getLabels(bid, labels), filteredAdUnitSizes);
+          // filter any per-bid override sizes
+          let filteredBidSizes = resolveBidOverrideSizes(bid, filteredAdUnitSizes);
+
+          let {active, sizes} = resolveStatus(getLabels(bid, labels), filteredBidSizes);
 
           if (active) {
             bids.push(Object.assign({}, bid, {
@@ -132,6 +135,16 @@ function getAdUnitCopyForClientAdapters(adUnits) {
 
   return adUnitsClientCopy;
 }
+
+exports.gdprDataHandler = {
+  consentData: null,
+  setConsentData: function(consentInfo) {
+    this.consentData = consentInfo;
+  },
+  getConsentData: function() {
+    return this.consentData;
+  }
+};
 
 exports.makeBidRequests = function(adUnits, auctionStart, auctionId, cbTimeout, labels) {
   let bidRequests = [];
@@ -197,6 +210,12 @@ exports.makeBidRequests = function(adUnits, auctionStart, auctionId, cbTimeout, 
       bidRequests.push(bidderRequest);
     }
   });
+
+  if (exports.gdprDataHandler.getConsentData()) {
+    bidRequests.forEach(bidRequest => {
+      bidRequest['gdprConsent'] = exports.gdprDataHandler.getConsentData();
+    });
+  }
   return bidRequests;
 };
 
