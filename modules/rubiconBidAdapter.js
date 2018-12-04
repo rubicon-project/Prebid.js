@@ -673,14 +673,17 @@ function appendSiteAppDevice(data, bidRequest, bidderRequest) {
     data.site = {
       page: _getPageUrl(bidRequest, bidderRequest)
     }
-    if (bidRequest.params.video.language) {
-      data.site.content = {
-        language: bidRequest.params.video.language
-      }
-    }
   }
   if (typeof config.getConfig('device') === 'object') {
     data.device = config.getConfig('device');
+  }
+  // Add language to site and device objects if there
+  if (bidRequest.params.video.language) {
+    ['site', 'device'].forEach(function(param) {
+      if (data[param]) {
+        data[param].content = Object.assign({language: bidRequest.params.video.language}, data[param].content)
+      }
+    });
   }
 }
 
