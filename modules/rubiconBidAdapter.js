@@ -673,6 +673,11 @@ function appendSiteAppDevice(data, bidRequest, bidderRequest) {
     data.site = {
       page: _getPageUrl(bidRequest, bidderRequest)
     }
+    if (bidRequest.params.video.language) {
+      data.site.content = {
+        language: bidRequest.params.video.language
+      }
+    }
   }
   if (typeof config.getConfig('device') === 'object') {
     data.device = config.getConfig('device');

@@ -1075,6 +1075,8 @@ describe('the rubicon adapter', function () {
           expect(imp.ext.rubicon.video.playerHeight).to.equal(320);
           expect(imp.ext.rubicon.video.size_id).to.equal(201);
           expect(imp.ext.rubicon.video.language).to.equal('en');
+          // Also want it to be in post.site.content.language
+          expect(post.site.content.language).to.equal('en');
           expect(imp.ext.rubicon.video.skip).to.equal(1);
           expect(imp.ext.rubicon.video.skipafter).to.equal(15);
           expect(post.user.ext.consent).to.equal('BOJ/P2HOJ/P2HABABMAAAAAZ+A==');
@@ -1115,6 +1117,8 @@ describe('the rubicon adapter', function () {
           expect(imp.ext.rubicon.video.playerHeight).to.equal(480);
           expect(imp.ext.rubicon.video.size_id).to.equal(201);
           expect(imp.ext.rubicon.video.language).to.equal('en');
+          // Also want it to be in post.site.content.language
+          expect(post.site.content.language).to.equal('en');
           expect(imp.ext.rubicon.video.skip).to.equal(1);
           expect(imp.ext.rubicon.video.skipafter).to.equal(15);
           expect(post.user.ext.consent).to.equal('BOJ/P2HOJ/P2HABABMAAAAAZ+A==');
