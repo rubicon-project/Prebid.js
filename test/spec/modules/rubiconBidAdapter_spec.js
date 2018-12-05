@@ -1084,9 +1084,9 @@ describe('the rubicon adapter', function () {
           expect(post).to.have.property('ext').that.is.an('object');
           expect(post.ext.prebid.targeting.includewinners).to.equal(true);
           expect(post.ext.prebid).to.have.property('cache').that.is.an('object')
-          expect(post.ext.prebid.cache).to.have.property('vastXml').that.is.an('object')
-          expect(post.ext.prebid.cache.vastXml).to.have.property('returnCreative').that.is.an('boolean')
-          expect(post.ext.prebid.cache.vastXml.returnCreative).to.equal(false)
+          expect(post.ext.prebid.cache).to.have.property('vastxml').that.is.an('object')
+          expect(post.ext.prebid.cache.vastxml).to.have.property('returnCreative').that.is.an('boolean')
+          expect(post.ext.prebid.cache.vastxml.returnCreative).to.equal(false)
         });
 
         it('should make a well-formed video request', function () {
@@ -1126,9 +1126,9 @@ describe('the rubicon adapter', function () {
           expect(post).to.have.property('ext').that.is.an('object');
           expect(post.ext.prebid.targeting.includewinners).to.equal(true);
           expect(post.ext.prebid).to.have.property('cache').that.is.an('object')
-          expect(post.ext.prebid.cache).to.have.property('vastXml').that.is.an('object')
-          expect(post.ext.prebid.cache.vastXml).to.have.property('returnCreative').that.is.an('boolean')
-          expect(post.ext.prebid.cache.vastXml.returnCreative).to.equal(false)
+          expect(post.ext.prebid.cache).to.have.property('vastxml').that.is.an('object')
+          expect(post.ext.prebid.cache.vastxml).to.have.property('returnCreative').that.is.an('boolean')
+          expect(post.ext.prebid.cache.vastxml.returnCreative).to.equal(false)
         });
 
         it('should send request with proper ad position', function () {

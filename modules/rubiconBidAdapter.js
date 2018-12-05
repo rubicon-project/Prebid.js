@@ -131,7 +131,7 @@ export const spec = {
         ext: {
           prebid: {
             cache: {
-              vastXml: {
+              vastxml: {
                 returnCreative: false // don't return the VAST
               }
             },
