@@ -122,6 +122,73 @@ export const pubCommonIdSubmodule = {
   }
 };
 
+// @type {Submodule}
+export const digitrustIdModule = {
+  name: 'digitrust',
+  decode(value) {
+    let decodedId;
+    try {
+      // decode the id per DigiTrust lib
+      decodedId = atob(value);
+      return {
+        'digitrustid': decodedId
+      }
+    } catch (e) {
+      return undefined;
+    }
+  },
+  getId() {
+    const MAX_RETRIES = 4;
+    let retries = 0;
+
+    return function (callback) {
+      function initDigiTrust() {
+        if (((typeof window.DigiTrust !== 'undefined' && window.DigiTrust == null) ? false : DigiTrust.isClient) === false) {
+          if (retries < MAX_RETRIES) {
+            // set timeout with extended time to check for the DigiTrust frame work
+            setTimeout(initDigiTrust, 100 * (1 + retries++));
+          } else {
+            // failed to find the framework,
+            utils.logInfo(`${MODULE_NAME} - DigiTrust framework timeout, fallback to API`);
+            // try to load a id using the DigiTrust web api
+            ajax('https://cdn-cf.digitru.st/id/v1', {
+                success(respText) {
+                  let encodedId;
+                  if (respText) {
+                    // encode the Id per DigiTrust lib
+                    try {
+                      encodedId = btoa(respText);
+                    } catch (e) {}
+                  }
+                  // execute callback to notify async is complete
+                  callback(encodedId);
+                },
+                error(message) {
+                  // failure getting id fromm api, execute callback to notify async is complete
+                  utils.logError(`${MODULE_NAME} - DigiTrustId API error: ${message}`);
+                  callback();
+                }
+              }, undefined, {method: 'GET'});
+          }
+        } else {
+          // DigiTrust framework exists, call getUser to get id
+          DigiTrust.getUser({member: 'prebid'}, function(idResult) {
+            if (idResult && idResult.success && idResult.identity) {
+              // valid user id
+              callback(idResult.identity);
+            } else {
+              // Failure getting id, execute callback to notify async is complete
+              callback();
+            }
+          });
+        }
+      }
+      initDigiTrust();
+    }
+  }
+}
+
+
 /**
  * @param {SubmoduleStorage} storage
  * @param {string} value
@@ -420,4 +487,8 @@ export function init (config, enabledSubmodules) {
   });
 }
 
-init(config, [pubCommonIdSubmodule, unifiedIdSubmodule]);
+init(config, [
+  pubCommonIdSubmodule,
+  unifiedIdSubmodule,
+  digitrustIdModule
+]);
