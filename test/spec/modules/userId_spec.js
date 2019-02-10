@@ -4,6 +4,7 @@ import {
   submodules,
   pubCommonIdSubmodule,
   unifiedIdSubmodule,
+  digitrustIdModule,
   requestBidsHook
 } from 'modules/userId';
 import {config} from 'src/config';
@@ -409,6 +410,84 @@ describe('User ID', function() {
           expect(typeof bid.userId).to.equal('undefined');
         });
       });
+    });
+  });
+
+  describe('DigiTrust submodule works as expected', function () {
+    let createAuctionStub;
+    let adUnits;
+    let adUnitCodes;
+    let sampleSpec = {
+      code: 'sampleBidder',
+      isBidRequestValid: () => {},
+      buildRequest: (reqs) => {},
+      interpretResponse: () => {},
+      getUserSyncs: () => {}
+    };
+    let xhr;
+    let requests;
+    let clock;
+
+    before(function() {
+      clock = sinon.useFakeTimers();
+      xhr = sinon.useFakeXMLHttpRequest();
+      requests = [];
+      xhr.onCreate = function (xhr) {
+        requests.push(xhr);
+      };
+    });
+
+    after(function() {
+      clock.restore();
+      xhr.restore();
+    });
+
+    beforeEach(function() {
+      adUnits = [{
+        code: 'adUnit-code',
+        mediaTypes: {
+          banner: {},
+          native: {},
+        },
+        sizes: [[300, 200], [300, 600]],
+        bids: [
+          {bidder: 'sampleBidder', params: {placementId: 'banner-only-bidder'}}
+        ]
+      }];
+      adUnitCodes = ['adUnit-code'];
+      let auction = auctionModule.newAuction({adUnits, adUnitCodes, callback: function() {}, cbTimeout: 2000});
+      createAuctionStub = sinon.stub(auctionModule, 'newAuction');
+      createAuctionStub.returns(auction);
+      init(config, [digitrustIdModule]);
+      registerBidder(sampleSpec);
+    });
+
+    afterEach(function() {
+      auctionModule.newAuction.restore();
+      $$PREBID_GLOBAL$$.requestBids.removeAll();
+      config.resetConfig();
+      utils.setCookie('DigiTrust', '0', EXPIRED_COOKIE_DATE);
+    })
+
+    it('Calls API if framework is not found', function() {
+      config.setConfig({
+        usersync: {
+          syncDelay: 0,
+          userIds: [createStorageConfig('digitrust', 'DigiTrust', 'cookie', 50000)]
+        }
+      });
+
+      $$PREBID_GLOBAL$$.requestBids({adUnits});
+      clock.tick(4000);
+      expect(requests.length).to.equal(1);
+      expect(requests[0].url).to.equal('https://cdn-cf.digitru.st/id/v1');
+
+      requests[0].respond(200, {"Content-Type": "text/plain"}, "1234567890")
+
+      const digitrustCookie = utils.getCookie('DigiTrust');
+      expect(typeof digitrustCookie === 'string').to.equal(true);
+      // expect decoded digistrust stored cookie equals value from url request
+      expect(atob(digitrustCookie)).to.equal('1234567890');
     });
   });
 });
