@@ -427,6 +427,15 @@ describe('User ID', function() {
     let xhr;
     let requests;
     let clock;
+    const DigiTrust = {
+      isClient: true,
+      getUser(data) {
+        return {
+          success: true,
+          identity: '0000'
+        };
+      }
+    }
 
     before(function() {
       clock = sinon.useFakeTimers();
@@ -435,14 +444,18 @@ describe('User ID', function() {
       xhr.onCreate = function (xhr) {
         requests.push(xhr);
       };
+      // use to test behavior when a digitrust cookie exists (note: DigiTrust cookie values are encoded in base64)
+      utils.setCookie('DigiTrust.1', btoa('678678678'), Number.MAX_VALUE);
     });
 
     after(function() {
       clock.restore();
       xhr.restore();
+      utils.setCookie('DigiTrust.1', '0', EXPIRED_COOKIE_DATE);
     });
 
     beforeEach(function() {
+      requests = [];
       adUnits = [{
         code: 'adUnit-code',
         mediaTypes: {
@@ -458,6 +471,7 @@ describe('User ID', function() {
       let auction = auctionModule.newAuction({adUnits, adUnitCodes, callback: function() {}, cbTimeout: 2000});
       createAuctionStub = sinon.stub(auctionModule, 'newAuction');
       createAuctionStub.returns(auction);
+      sinon.stub(utils, 'logError');
       init(config, [digitrustIdModule]);
       registerBidder(sampleSpec);
     });
@@ -465,11 +479,12 @@ describe('User ID', function() {
     afterEach(function() {
       auctionModule.newAuction.restore();
       $$PREBID_GLOBAL$$.requestBids.removeAll();
+      utils.logError.restore();
       config.resetConfig();
       utils.setCookie('DigiTrust', '0', EXPIRED_COOKIE_DATE);
-    })
+    });
 
-    it('Calls API if framework is not found', function() {
+    it('Gets userid from webservice if framework does not exist', function() {
       config.setConfig({
         usersync: {
           syncDelay: 0,
@@ -488,6 +503,80 @@ describe('User ID', function() {
       expect(typeof digitrustCookie === 'string').to.equal(true);
       // expect decoded digistrust stored cookie equals value from url request
       expect(atob(digitrustCookie)).to.equal('1234567890');
+    });
+
+    it('Gets userid from framework if it exists', function() {
+      const stubGetUser = sinon.stub(DigiTrust, 'getUser').callsFake(function fakeGetUser(data, callback) {
+        callback({success: true, identity: '9876543210'});
+      });
+      window.DigiTrust = DigiTrust;
+
+      config.setConfig({
+        usersync: {
+          syncDelay: 0,
+          userIds: [createStorageConfig('digitrust', 'DigiTrust', 'cookie', 50000)]
+        }
+      });
+
+      $$PREBID_GLOBAL$$.requestBids({adUnits});
+      clock.tick(1000);
+      expect(requests.length).to.equal(0);
+
+      const digitrustCookie = utils.getCookie('DigiTrust');
+      expect(typeof digitrustCookie === 'string').to.equal(true);
+      // expect decoded digistrust stored cookie equals value from url request
+      expect(atob(digitrustCookie)).to.equal('9876543210');
+
+      stubGetUser.restore();
+      delete window.DigiTrust;
+    });
+
+    it('Handles no data returned from framework', function() {
+      const stubGetUser = sinon.stub(DigiTrust, 'getUser').callsFake(function fakeGetUser(data, callback) {
+        callback({success: false});
+      });
+      window.DigiTrust = DigiTrust;
+
+      config.setConfig({
+        usersync: {
+          syncDelay: 0,
+          userIds: [createStorageConfig('digitrust', 'DigiTrust', 'cookie', 50000)]
+        }
+      });
+
+      $$PREBID_GLOBAL$$.requestBids({adUnits});
+      clock.tick(1000);
+
+      // expect no webrequest since the framework is defined
+      expect(requests.length).to.equal(0);
+      // expect no cookie value to be saved since framework returned no data
+      const digitrustCookie = utils.getCookie('DigiTrust');
+      expect(typeof digitrustCookie === 'string').to.equal(false);
+      expect(utils.logError.args.length).to.equal(2);
+      // should get an error message that data was empty
+      expect(utils.logError.args[1][0]).to.equal('User ID: digitrust - request id responded with an empty value');
+
+      stubGetUser.restore();
+      delete window.DigiTrust;
+    });
+
+    it('Decodes userid data and passes to bids when cookie value exists', function() {
+      config.setConfig({
+        usersync: {
+          syncDelay: 0,
+          userIds: [createStorageConfig('digitrust', 'DigiTrust.1', 'cookie', 50000)]}
+      });
+
+      $$PREBID_GLOBAL$$.requestBids({adUnits});
+
+      adUnits.forEach((unit) => {
+        unit.bids.forEach((bid) => {
+          // verify that the PubCommonId id data was copied to bid
+          expect(bid).to.have.deep.nested.property('userId.digitrustid');
+          // should be the decoded value set by 'util.setCookie' in the 'before'
+          expect(bid.userId.digitrustid).to.equal('678678678');
+        });
+      });
     });
   });
 });

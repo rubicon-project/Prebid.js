@@ -143,12 +143,12 @@ export const digitrustIdModule = {
 
     return function (callback) {
       function initDigiTrust() {
-        if (typeof window.DigiTrust !== 'undefined' && window.DigiTrust != null && DigiTrust.isClient === true) {
+        if (window.DigiTrust && typeof window.DigiTrust === 'object' && DigiTrust.isClient === true) {
           // DigiTrust framework exists, call getUser to get id
           DigiTrust.getUser({member: 'prebid'}, function(idResult) {
             if (idResult && idResult.success && idResult.identity) {
               // valid user id
-              callback(idResult.identity);
+              callback(btoa(idResult.identity));
             } else {
               // Failure getting id, execute callback to notify async is complete
               callback();
