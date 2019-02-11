@@ -505,6 +505,54 @@ describe('User ID', function() {
       expect(atob(digitrustCookie)).to.equal('1234567890');
     });
 
+    it('Handles webservice request error', function() {
+      config.setConfig({
+        usersync: {
+          syncDelay: 0,
+          userIds: [createStorageConfig('digitrust', 'DigiTrust', 'cookie', 50000)]
+        }
+      });
+
+      $$PREBID_GLOBAL$$.requestBids({adUnits});
+      clock.tick(4000);
+      expect(requests.length).to.equal(1);
+      expect(requests[0].url).to.equal('https://cdn-cf.digitru.st/id/v1');
+
+      requests[0].respond(500, {}, "")
+
+      const digitrustCookie = utils.getCookie('DigiTrust');
+      expect(typeof digitrustCookie === 'string').to.equal(false);
+
+      expect(utils.logError.args.length).to.equal(3);
+      // should get error messages for api error and empty value
+      expect(utils.logError.args[1][0]).to.equal('User ID - DigiTrustId API error: Internal Server Error');
+      expect(utils.logError.args[2][0]).to.equal('User ID: digitrust - request id responded with an empty value');
+    });
+
+    it('Handles webservice response with invalid data (Unicode String)', function() {
+      config.setConfig({
+        usersync: {
+          syncDelay: 0,
+          userIds: [createStorageConfig('digitrust', 'DigiTrust', 'cookie', 50000)]
+        }
+      });
+
+      $$PREBID_GLOBAL$$.requestBids({adUnits});
+      clock.tick(4000);
+      expect(requests.length).to.equal(1);
+      expect(requests[0].url).to.equal('https://cdn-cf.digitru.st/id/v1');
+
+      // In most browsers, calling btoa() on a Unicode string will cause an InvalidCharacterError exception.
+      requests[0].respond(200, {"Content-Type": "text/text"}, "I \u2661 Unicode!")
+
+      const digitrustCookie = utils.getCookie('DigiTrust');
+      expect(typeof digitrustCookie === 'string').to.equal(false);
+
+      expect(utils.logError.args.length).to.equal(2);
+      // should get error messages for api error and empty value
+      expect(utils.logError.args[1][0]).to.equal('User ID: digitrust - request id responded with an empty value');
+    });
+
     it('Gets userid from framework if it exists', function() {
       const stubGetUser = sinon.stub(DigiTrust, 'getUser').callsFake(function fakeGetUser(data, callback) {
         callback({success: true, identity: '9876543210'});
@@ -519,7 +567,7 @@ describe('User ID', function() {
       });
 
       $$PREBID_GLOBAL$$.requestBids({adUnits});
-      clock.tick(1000);
+      clock.tick(4000);
       expect(requests.length).to.equal(0);
 
       const digitrustCookie = utils.getCookie('DigiTrust');
@@ -545,7 +593,7 @@ describe('User ID', function() {
       });
 
       $$PREBID_GLOBAL$$.requestBids({adUnits});
-      clock.tick(1000);
+      clock.tick(4000);
 
       // expect no webrequest since the framework is defined
       expect(requests.length).to.equal(0);
@@ -555,6 +603,34 @@ describe('User ID', function() {
       expect(utils.logError.args.length).to.equal(2);
       // should get an error message that data was empty
       expect(utils.logError.args[1][0]).to.equal('User ID: digitrust - request id responded with an empty value');
+
+      stubGetUser.restore();
+      delete window.DigiTrust;
+    });
+
+    it('Handles error when calling framework method to get userid data', function() {
+      const stubGetUser = sinon.stub(DigiTrust, 'getUser').throws('Error');
+      window.DigiTrust = DigiTrust;
+
+      config.setConfig({
+        usersync: {
+          syncDelay: 0,
+          userIds: [createStorageConfig('digitrust', 'DigiTrust', 'cookie', 50000)]
+        }
+      });
+
+      $$PREBID_GLOBAL$$.requestBids({adUnits});
+      clock.tick(4000);
+
+      // expect no webrequest since the framework is defined
+      expect(requests.length).to.equal(0);
+      // expect no cookie value to be saved since framework returned no data
+      const digitrustCookie = utils.getCookie('DigiTrust');
+      expect(typeof digitrustCookie === 'string').to.equal(false);
+      expect(utils.logError.args.length).to.equal(3);
+      // should get error messages for framework error and empty value
+      expect(utils.logError.args[1][0]).to.equal('User ID - DigiTrustId framework error: Error');
+      expect(utils.logError.args[2][0]).to.equal('User ID: digitrust - request id responded with an empty value');
 
       stubGetUser.restore();
       delete window.DigiTrust;

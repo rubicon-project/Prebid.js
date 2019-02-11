@@ -143,17 +143,22 @@ export const digitrustIdModule = {
 
     return function (callback) {
       function initDigiTrust() {
+        // If DigiTrust framework exists, call getUser to get id
         if (window.DigiTrust && typeof window.DigiTrust === 'object' && DigiTrust.isClient === true) {
-          // DigiTrust framework exists, call getUser to get id
-          DigiTrust.getUser({member: 'prebid'}, function(idResult) {
-            if (idResult && idResult.success && idResult.identity) {
-              // valid user id
-              callback(btoa(idResult.identity));
-            } else {
-              // Failure getting id, execute callback to notify async is complete
-              callback();
-            }
-          });
+          try {
+            DigiTrust.getUser({member: 'prebid'}, function(idResult) {
+              if (idResult && idResult.success && idResult.identity) {
+                // valid user id
+                callback(btoa(idResult.identity));
+              } else {
+                // Failure getting id, execute callback to notify async is complete
+                callback();
+              }
+            });
+          } catch (e) {
+            utils.logError(`${MODULE_NAME} - DigiTrustId framework error: ${e}`);
+            callback();
+          }
         } else {
           if (retries < MAX_RETRIES) {
             retries++;
