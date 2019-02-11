@@ -138,7 +138,7 @@ export const digitrustIdModule = {
     }
   },
   getId() {
-    function testDigiTrust (callback) {
+    function initDigiTrust (callback) {
       if (window.DigiTrust && typeof window.DigiTrust === 'object' && DigiTrust.isClient === true) {
         try {
           DigiTrust.getUser({member: 'prebid'}, function(idResult) {
@@ -166,20 +166,20 @@ export const digitrustIdModule = {
       return false;
     }
 
-    const MAX_RETRIES = 4;
-    let retries = 0;
-    const getUserResult = testDigiTrust();
+    const getUserResult = initDigiTrust();
 
     if (getUserResult && typeof getUserResult === 'string') {
       return getUserResult;
     } else {
       return function getIdAsync(callback) {
-        function pollFramework () {
-          if (!testDigiTrust(callback)) {
+        const MAX_RETRIES = 4;
+        let retries = 0;
+        function pollInitDigiTrust () {
+          if (!initDigiTrust(callback)) {
             if (retries < MAX_RETRIES) {
               retries++;
               // set timeout with extended time to check for the DigiTrust frame work
-              setTimeout(pollFramework, 100 * (1 + retries));
+              setTimeout(pollInitDigiTrust, 100 * (1 + retries));
             } else {
               // failed to find the framework,
               // try to load a id using the DigiTrust web api
@@ -204,7 +204,7 @@ export const digitrustIdModule = {
           }
         }
 
-        pollFramework(callback);
+        pollInitDigiTrust(callback);
       }
     }
   }
