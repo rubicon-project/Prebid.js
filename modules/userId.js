@@ -146,7 +146,7 @@ export const digitrustIdModule = {
       /** @type {(boolean|string)} */
       let digitrustIdResult = false;
 
-      if (window.DigiTrust && DigiTrust.isClient === true) {
+      if (DigiTrust && DigiTrust.isClient === true) {
         // result should be true if DigiTrust framework is ready
         digitrustIdResult = true;
         try {
