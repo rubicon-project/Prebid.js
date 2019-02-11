@@ -134,76 +134,84 @@ export const digitrustIdModule = {
         'digitrustid': decodedId
       }
     } catch (e) {
-      return undefined;
+      utils.logError(`${MODULE_NAME} - DigiTrustId decode error: ${e}`);
     }
   },
   getId() {
+    /**
+     * @param {function=} callback - when making an asynchronous call, this function notifies complete and passes userid value
+     * @returns {(boolean|string)} - true or false if framework is available, otherwise it's a string if getUser returned a userid value synchronously
+     */
     function initDigiTrust (callback) {
+      /** @type {(boolean|string)} */
+      let result = false;
       if (window.DigiTrust && typeof window.DigiTrust === 'object' && DigiTrust.isClient === true) {
+        // set true since DigiTrust framework was found
+        result = true;
         try {
-          DigiTrust.getUser({member: 'prebid'}, function(idResult) {
-            if (idResult && idResult.success && idResult.identity) {
-              // valid user id
-              if (typeof callback === 'function') {
-                callback(btoa(idResult.identity));
-              } else {
-                return btoa(idResult.identity);
-              }
-            } else {
-              if (typeof callback === 'function') {
-                callback();
-              }
+          DigiTrust.getUser({member: 'prebid'}, function getUserResult(idResult) {
+            result = (idResult && idResult.success && idResult.identity) ? btoa(idResult.identity) : '';
+            if (typeof callback === 'function') {
+              // getUser completed, so exit asynchronous call regardless if result is non-empty or not
+              callback(result);
             }
           });
         } catch (e) {
           utils.logError(`${MODULE_NAME} - DigiTrustId framework error: ${e}`);
           if (typeof callback === 'function') {
+            // error, exit asynchronous call
             callback();
           }
         }
-        return true;
       }
-      return false;
+      return result;
     }
 
+    /**
+     * If DigiTrust.getUser function returns a string, it is an userid, otherwise it's a boolean value for DigiTrust framework found/ready or not found
+     * @type {(boolean|string)}
+     */
     const getUserResult = initDigiTrust();
 
     if (getUserResult && typeof getUserResult === 'string') {
+      // synchronous, this value will be appened to bids in current auction
       return getUserResult;
     } else {
+      // asynchronous, userid retrieval delayed until after aution ends (and syncDelay if > 0)
       return function getIdAsync(callback) {
+        // number of times the DigiTrust framework will be polled to attempt userid retrieval
         const MAX_RETRIES = 4;
         let retries = 0;
+
         function pollInitDigiTrust () {
           if (!initDigiTrust(callback)) {
             if (retries < MAX_RETRIES) {
               retries++;
-              // set timeout with extended time to check for the DigiTrust frame work
+              // set timeout (extending time value each try) to try to get userid from DigiTrust frame work
               setTimeout(pollInitDigiTrust, 100 * (1 + retries));
             } else {
-              // failed to find the framework,
-              // try to load a id using the DigiTrust web api
+              // failed to find the framework, try to load a id using the DigiTrust web api
               ajax('https://cdn-cf.digitru.st/id/v1', {
-                success (respText) {
+                success (response) {
                   let encodedId;
-                  if (respText) {
-                    // encode the Id per DigiTrust lib
+                  if (response) {
                     try {
-                      encodedId = btoa(respText);
+                      // encode the userid per DigiTrust lib
+                      encodedId = btoa(response);
                     } catch (e) {}
                   }
-                  // execute callback to notify async is complete
+                  // userid or no value, exit asynchronous
                   callback(encodedId);
-                }, error (message) {
-                  // failure getting id fromm api, execute callback to notify async is complete
-                  utils.logError(`${MODULE_NAME} - DigiTrustId API error: ${message}`);
+                }, error (e) {
+                  // failure requesting id, exit asynchronous
+                  utils.logError(`${MODULE_NAME} - DigiTrustId API error: ${e}`);
                   callback();
                 }
               }, undefined, {method: 'GET'});
             }
           }
         }
-
+        // begin polling
         pollInitDigiTrust(callback);
       }
     }

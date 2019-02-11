@@ -429,12 +429,7 @@ describe('User ID', function() {
     let clock;
     const DigiTrust = {
       isClient: true,
-      getUser(data) {
-        return {
-          success: true,
-          identity: '0000'
-        };
-      }
+      getUser(data) {}
     }
 
     before(function() {
@@ -472,6 +467,7 @@ describe('User ID', function() {
       createAuctionStub = sinon.stub(auctionModule, 'newAuction');
       createAuctionStub.returns(auction);
       sinon.stub(utils, 'logError');
+
       init(config, [digitrustIdModule]);
       registerBidder(sampleSpec);
     });
@@ -553,7 +549,7 @@ describe('User ID', function() {
       expect(utils.logError.args[1][0]).to.equal('User ID: digitrust - request id responded with an empty value');
     });
 
-    it('Gets userid from framework if it exists', function() {
+    it('Gets userid from DigiTrust framework asynchronously', function() {
       let callbackRef;
       const stubGetUser = sinon.stub(DigiTrust, 'getUser').callsFake(function fakeGetUser(data, callback) {
         callbackRef = callback;
@@ -577,6 +573,49 @@ describe('User ID', function() {
       expect(typeof digitrustCookie === 'string').to.equal(true);
       // expect decoded digistrust stored cookie equals value from url request
       expect(atob(digitrustCookie)).to.equal('9876543210');
+
+      stubGetUser.restore();
+      delete window.DigiTrust;
+    });
+
+    it('Gets userid from DigiTrust framework synchronously and id added to bids in auction', function() {
+      const stubGetUser = sinon.stub(DigiTrust, 'getUser').callsFake(function fakeGetUser(data, callback) {
+        callback({success: true, identity: '222222'});
+      });
+      window.DigiTrust = DigiTrust;
+
+      config.setConfig({
+        usersync: {
+          syncDelay: 0,
+          userIds: [createStorageConfig('digitrust', 'DigiTrust', 'cookie', 5000000)]
+        }
+      });
+
+      $$PREBID_GLOBAL$$.requestBids({adUnits});
+
+      // should have no submodules with callbacks registered
+      const submodulesWithCallbacks = submodules.filter(item => (typeof item.callback === 'function' && typeof item.idObj === 'undefined'));
+      expect(submodulesWithCallbacks.length).to.equal(0);
+
+      clock.tick(4000);
+
+      // expect no webrequest since the framework was used
+      expect(requests.length).to.equal(0);
+
+      // expect decoded digistrust stored cookie equals value from url request
+      const digitrustCookie = utils.getCookie('DigiTrust');
+      expect(typeof digitrustCookie === 'string').to.equal(true);
+      expect(atob(digitrustCookie)).to.equal('222222');
+
+      // expect digitrustid to be added to current auction bids
+      adUnits.forEach((unit) => {
+        unit.bids.forEach((bid) => {
+          // verify that the id data was copied to bid
+          expect(bid).to.have.deep.nested.property('userId.digitrustid');
+          // should be the decoded value set by 'util.setCookie' in the 'before'
+          expect(bid.userId.digitrustid).to.equal('222222');
+        });
+      });
 
       stubGetUser.restore();
       delete window.DigiTrust;
@@ -614,8 +653,10 @@ describe('User ID', function() {
       delete window.DigiTrust;
     });
 
-    it.skip('Handles error when calling framework method to get userid data', function() {
-      const stubGetUser = sinon.stub(DigiTrust, 'getUser').throws('Error');
+    it('Handles error when calling framework method to get userid data', function() {
+      const stubGetUser = sinon.stub(DigiTrust, 'getUser').onFirstCall().returns(undefined);
+      stubGetUser.onSecondCall().throws('Error');
+
       window.DigiTrust = DigiTrust;
 
       config.setConfig({
@@ -626,6 +667,7 @@ describe('User ID', function() {
       });
 
       $$PREBID_GLOBAL$$.requestBids({adUnits});
+
       clock.tick(4000);
 
       // expect no webrequest since the framework is defined
@@ -653,7 +695,7 @@ describe('User ID', function() {
 
       adUnits.forEach((unit) => {
         unit.bids.forEach((bid) => {
-          // verify that the PubCommonId id data was copied to bid
+          // verify that the id data was copied to bid
           expect(bid).to.have.deep.nested.property('userId.digitrustid');
           // should be the decoded value set by 'util.setCookie' in the 'before'
           expect(bid.userId.digitrustid).to.equal('678678678');
