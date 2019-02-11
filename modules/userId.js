@@ -144,16 +144,17 @@ export const digitrustIdModule = {
      */
     function initDigiTrust (callback) {
       /** @type {(boolean|string)} */
-      let result = false;
-      if (window.DigiTrust && typeof window.DigiTrust === 'object' && DigiTrust.isClient === true) {
-        // set true since DigiTrust framework was found
-        result = true;
+      let digitrustIdResult = false;
+
+      if (window.DigiTrust && DigiTrust.isClient === true) {
+        // result should be true if DigiTrust framework is ready
+        digitrustIdResult = true;
         try {
           DigiTrust.getUser({member: 'prebid'}, function getUserResult(idResult) {
-            result = (idResult && idResult.success && idResult.identity) ? btoa(idResult.identity) : '';
+            digitrustIdResult = (idResult && idResult.success && idResult.identity) ? btoa(idResult.identity) : '';
             if (typeof callback === 'function') {
-              // getUser completed, so exit asynchronous call regardless if result is non-empty or not
-              callback(result);
+              // getUser completed, exit asynchronous call regardless if result is non-empty or not
+              callback(digitrustIdResult);
             }
           });
         } catch (e) {
@@ -164,7 +165,7 @@ export const digitrustIdModule = {
           }
         }
       }
-      return result;
+      return digitrustIdResult;
     }
 
     /**
@@ -174,45 +175,31 @@ export const digitrustIdModule = {
     const getUserResult = initDigiTrust();
 
     if (getUserResult && typeof getUserResult === 'string') {
-      // synchronous, this value will be appened to bids in current auction
+      // synchronous, this value will be appended to bids in current auction
       return getUserResult;
     } else {
       // asynchronous, userid retrieval delayed until after aution ends (and syncDelay if > 0)
       return function getIdAsync(callback) {
-        // number of times the DigiTrust framework will be polled to attempt userid retrieval
-        const MAX_RETRIES = 4;
-        let retries = 0;
-
-        function pollInitDigiTrust () {
-          if (!initDigiTrust(callback)) {
-            if (retries < MAX_RETRIES) {
-              retries++;
-              // set timeout (extending time value each try) to try to get userid from DigiTrust frame work
-              setTimeout(pollInitDigiTrust, 100 * (1 + retries));
-            } else {
-              // failed to find the framework, try to load a id using the DigiTrust web api
-              ajax('https://cdn-cf.digitru.st/id/v1', {
-                success (response) {
-                  let encodedId;
-                  if (response) {
-                    try {
-                      // encode the userid per DigiTrust lib
-                      encodedId = btoa(response);
-                    } catch (e) {}
-                  }
-                  // userid or no value, exit asynchronous
-                  callback(encodedId);
-                }, error (e) {
-                  // failure requesting id, exit asynchronous
-                  utils.logError(`${MODULE_NAME} - DigiTrustId API error: ${e}`);
-                  callback();
-                }
-              }, undefined, {method: 'GET'});
+        if (!initDigiTrust(callback)) {
+          // failed to find the framework, try to load a id using the DigiTrust web api
+          ajax('https://cdn-cf.digitru.st/id/v1', {
+            success (response) {
+              let encodedId;
+              if (response) {
+                try {
+                  // encode the userid per DigiTrust lib
+                  encodedId = btoa(response);
+                } catch (e) {}
+              }
+              // userid or no value, exit asynchronous
+              callback(encodedId);
+            }, error (e) {
+              // failure requesting id, exit asynchronous
+              utils.logError(`${MODULE_NAME} - DigiTrustId API error: ${e}`);
+              callback();
             }
-          }
+          }, undefined, {method: 'GET'});
         }
-        // begin polling
-        pollInitDigiTrust(callback);
       }
     }
   }

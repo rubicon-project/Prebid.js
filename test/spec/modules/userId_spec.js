@@ -426,14 +426,13 @@ describe('User ID', function() {
     };
     let xhr;
     let requests;
-    let clock;
+
     const DigiTrust = {
       isClient: true,
       getUser(data) {}
     }
 
     before(function() {
-      clock = sinon.useFakeTimers();
       xhr = sinon.useFakeXMLHttpRequest();
       requests = [];
       xhr.onCreate = function (xhr) {
@@ -444,7 +443,6 @@ describe('User ID', function() {
     });
 
     after(function() {
-      clock.restore();
       xhr.restore();
       utils.setCookie('DigiTrust.1', '0', EXPIRED_COOKIE_DATE);
     });
@@ -463,6 +461,7 @@ describe('User ID', function() {
         ]
       }];
       adUnitCodes = ['adUnit-code'];
+
       let auction = auctionModule.newAuction({adUnits, adUnitCodes, callback: function() {}, cbTimeout: 2000});
       createAuctionStub = sinon.stub(auctionModule, 'newAuction');
       createAuctionStub.returns(auction);
@@ -489,15 +488,21 @@ describe('User ID', function() {
       });
 
       $$PREBID_GLOBAL$$.requestBids({adUnits});
-      clock.tick(4000);
+
+      // should have 1 submodule with callbacks registered
+      const submodulesWithCallbacks = submodules.filter(item => (typeof item.callback === 'function' && typeof item.idObj === 'undefined'));
+      expect(submodulesWithCallbacks.length).to.equal(1);
+
+      // getId should make a web request
       expect(requests.length).to.equal(1);
       expect(requests[0].url).to.equal('https://cdn-cf.digitru.st/id/v1');
 
+      // make the server respond with valid response data
       requests[0].respond(200, {"Content-Type": "text/plain"}, "1234567890")
 
+      // expect decoded digistrust stored cookie equals value from url request
       const digitrustCookie = utils.getCookie('DigiTrust');
       expect(typeof digitrustCookie === 'string').to.equal(true);
-      // expect decoded digistrust stored cookie equals value from url request
       expect(atob(digitrustCookie)).to.equal('1234567890');
     });
 
@@ -510,22 +515,29 @@ describe('User ID', function() {
       });
 
       $$PREBID_GLOBAL$$.requestBids({adUnits});
-      clock.tick(4000);
+
+      // should have 1 submodule with callbacks registered
+      const submodulesWithCallbacks = submodules.filter(item => (typeof item.callback === 'function' && typeof item.idObj === 'undefined'));
+      expect(submodulesWithCallbacks.length).to.equal(1);
+
+      // getId should make a request
       expect(requests.length).to.equal(1);
       expect(requests[0].url).to.equal('https://cdn-cf.digitru.st/id/v1');
 
+      // respond with server error to test that getId will catch the error
       requests[0].respond(500, {}, "")
 
+      // a cookie value should not have been created
       const digitrustCookie = utils.getCookie('DigiTrust');
       expect(typeof digitrustCookie === 'string').to.equal(false);
 
-      expect(utils.logError.args.length).to.equal(3);
       // should get error messages for api error and empty value
+      expect(utils.logError.args.length).to.equal(3);
       expect(utils.logError.args[1][0]).to.equal('User ID - DigiTrustId API error: Internal Server Error');
       expect(utils.logError.args[2][0]).to.equal('User ID: digitrust - request id responded with an empty value');
     });
 
-    it('Handles webservice response with invalid data (Unicode String)', function() {
+    it('Handles invalid webservice response data (Unicode String)', function() {
       config.setConfig({
         usersync: {
           syncDelay: 0,
@@ -534,18 +546,24 @@ describe('User ID', function() {
       });
 
       $$PREBID_GLOBAL$$.requestBids({adUnits});
-      clock.tick(4000);
+
+      // should have 1 submodule with callbacks registered
+      const submodulesWithCallbacks = submodules.filter(item => (typeof item.callback === 'function' && typeof item.idObj === 'undefined'));
+      expect(submodulesWithCallbacks.length).to.equal(1);
+
+      // getId should make a request
       expect(requests.length).to.equal(1);
       expect(requests[0].url).to.equal('https://cdn-cf.digitru.st/id/v1');
 
       // In most browsers, calling btoa() on a Unicode string will cause an InvalidCharacterError exception.
       requests[0].respond(200, {"Content-Type": "text/text"}, "I \u2661 Unicode!")
 
+      // a cookie value should not have been created
       const digitrustCookie = utils.getCookie('DigiTrust');
       expect(typeof digitrustCookie === 'string').to.equal(false);
 
-      expect(utils.logError.args.length).to.equal(2);
       // should get error messages for api error and empty value
+      expect(utils.logError.args.length).to.equal(2);
       expect(utils.logError.args[1][0]).to.equal('User ID: digitrust - request id responded with an empty value');
     });
 
@@ -553,7 +571,6 @@ describe('User ID', function() {
       let callbackRef;
       const stubGetUser = sinon.stub(DigiTrust, 'getUser').callsFake(function fakeGetUser(data, callback) {
         callbackRef = callback;
-        // callback({success: true, identity: '9876543210'});
       });
       window.DigiTrust = DigiTrust;
 
@@ -565,13 +582,20 @@ describe('User ID', function() {
       });
 
       $$PREBID_GLOBAL$$.requestBids({adUnits});
+
+      // should have 1 submodule with callbacks registered
+      expect((submodules.filter(item => (typeof item.callback === 'function' && typeof item.idObj === 'undefined'))).length).to.equal(1);
+      // execute submodule getId async callback
       callbackRef({success: true, identity: '9876543210'});
-      clock.tick(4000);
+      // now it should be 0 since it has been executed
+      expect((submodules.filter(item => (typeof item.callback === 'function' && typeof item.idObj === 'undefined'))).length).to.equal(0);
+
+      // getId should not make a request, since DigiTrust framework is handling the userid
       expect(requests.length).to.equal(0);
 
+      // expect decoded digitrust stored cookie equals value from url request
       const digitrustCookie = utils.getCookie('DigiTrust');
       expect(typeof digitrustCookie === 'string').to.equal(true);
-      // expect decoded digistrust stored cookie equals value from url request
       expect(atob(digitrustCookie)).to.equal('9876543210');
 
       stubGetUser.restore();
@@ -597,8 +621,6 @@ describe('User ID', function() {
       const submodulesWithCallbacks = submodules.filter(item => (typeof item.callback === 'function' && typeof item.idObj === 'undefined'));
       expect(submodulesWithCallbacks.length).to.equal(0);
 
-      clock.tick(4000);
-
       // expect no webrequest since the framework was used
       expect(requests.length).to.equal(0);
 
@@ -610,9 +632,8 @@ describe('User ID', function() {
       // expect digitrustid to be added to current auction bids
       adUnits.forEach((unit) => {
         unit.bids.forEach((bid) => {
-          // verify that the id data was copied to bid
+          // verify that the id data was decoded correctly and copied to bid
           expect(bid).to.have.deep.nested.property('userId.digitrustid');
-          // should be the decoded value set by 'util.setCookie' in the 'before'
           expect(bid.userId.digitrustid).to.equal('222222');
         });
       });
@@ -624,7 +645,6 @@ describe('User ID', function() {
     it('Handles no data returned from framework', function() {
       let callbackRef;
       const stubGetUser = sinon.stub(DigiTrust, 'getUser').callsFake(function fakeGetUser(data, callback) {
-        // callback({success: false});
         callbackRef = callback;
       });
       window.DigiTrust = DigiTrust;
@@ -637,16 +657,22 @@ describe('User ID', function() {
       });
 
       $$PREBID_GLOBAL$$.requestBids({adUnits});
+      // should have 1 submodules with callbacks registered
+      expect((submodules.filter(item => (typeof item.callback === 'function' && typeof item.idObj === 'undefined'))).length).to.equal(1);
+      // executed getId async callback
       callbackRef({success: false});
-      clock.tick(4000);
+      // now no submodules with callbacks should be registered
+      expect((submodules.filter(item => (typeof item.callback === 'function' && typeof item.idObj === 'undefined'))).length).to.equal(0);
 
       // expect no webrequest since the framework is defined
       expect(requests.length).to.equal(0);
+
       // expect no cookie value to be saved since framework returned no data
       const digitrustCookie = utils.getCookie('DigiTrust');
       expect(typeof digitrustCookie === 'string').to.equal(false);
-      expect(utils.logError.args.length).to.equal(2);
+
       // should get an error message that data was empty
+      expect(utils.logError.args.length).to.equal(2);
       expect(utils.logError.args[1][0]).to.equal('User ID: digitrust - request id responded with an empty value');
 
       stubGetUser.restore();
@@ -656,7 +682,6 @@ describe('User ID', function() {
     it('Handles error when calling framework method to get userid data', function() {
       const stubGetUser = sinon.stub(DigiTrust, 'getUser').onFirstCall().returns(undefined);
       stubGetUser.onSecondCall().throws('Error');
-
       window.DigiTrust = DigiTrust;
 
       config.setConfig({
@@ -668,15 +693,15 @@ describe('User ID', function() {
 
       $$PREBID_GLOBAL$$.requestBids({adUnits});
 
-      clock.tick(4000);
-
       // expect no webrequest since the framework is defined
       expect(requests.length).to.equal(0);
+
       // expect no cookie value to be saved since framework returned no data
       const digitrustCookie = utils.getCookie('DigiTrust');
       expect(typeof digitrustCookie === 'string').to.equal(false);
-      expect(utils.logError.args.length).to.equal(3);
+
       // should get error messages for framework error and empty value
+      expect(utils.logError.args.length).to.equal(3);
       expect(utils.logError.args[1][0]).to.equal('User ID - DigiTrustId framework error: Error');
       expect(utils.logError.args[2][0]).to.equal('User ID: digitrust - request id responded with an empty value');
 
@@ -693,11 +718,17 @@ describe('User ID', function() {
 
       $$PREBID_GLOBAL$$.requestBids({adUnits});
 
+      // should have no submodules with callbacks registered
+      const submodulesWithCallbacks = submodules.filter(item => (typeof item.callback === 'function' && typeof item.idObj === 'undefined'));
+      expect(submodulesWithCallbacks.length).to.equal(0);
+
+      // expect no webrequest since the framework is defined
+      expect(requests.length).to.equal(0);
+
       adUnits.forEach((unit) => {
         unit.bids.forEach((bid) => {
-          // verify that the id data was copied to bid
+          // verify that the id data was decoded correctly and copied to bid
           expect(bid).to.have.deep.nested.property('userId.digitrustid');
-          // should be the decoded value set by 'util.setCookie' in the 'before'
           expect(bid.userId.digitrustid).to.equal('678678678');
         });
       });
