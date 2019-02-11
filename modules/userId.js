@@ -138,57 +138,74 @@ export const digitrustIdModule = {
     }
   },
   getId() {
-    const MAX_RETRIES = 4;
-    let retries = 0;
-
-    return function (callback) {
-      function initDigiTrust() {
-        // If DigiTrust framework exists, call getUser to get id
-        if (window.DigiTrust && typeof window.DigiTrust === 'object' && DigiTrust.isClient === true) {
-          try {
-            DigiTrust.getUser({member: 'prebid'}, function(idResult) {
-              if (idResult && idResult.success && idResult.identity) {
-                // valid user id
+    function testDigiTrust (callback) {
+      if (window.DigiTrust && typeof window.DigiTrust === 'object' && DigiTrust.isClient === true) {
+        try {
+          DigiTrust.getUser({member: 'prebid'}, function(idResult) {
+            if (idResult && idResult.success && idResult.identity) {
+              // valid user id
+              if (typeof callback === 'function') {
                 callback(btoa(idResult.identity));
               } else {
-                // Failure getting id, execute callback to notify async is complete
+                return btoa(idResult.identity);
+              }
+            } else {
+              if (typeof callback === 'function') {
                 callback();
               }
-            });
-          } catch (e) {
-            utils.logError(`${MODULE_NAME} - DigiTrustId framework error: ${e}`);
+            }
+          });
+        } catch (e) {
+          utils.logError(`${MODULE_NAME} - DigiTrustId framework error: ${e}`);
+          if (typeof callback === 'function') {
             callback();
           }
-        } else {
-          if (retries < MAX_RETRIES) {
-            retries++;
-            // set timeout with extended time to check for the DigiTrust frame work
-            setTimeout(initDigiTrust, 100 * (1 + retries));
-          } else {
-            // failed to find the framework,
-            // try to load a id using the DigiTrust web api
-            ajax('https://cdn-cf.digitru.st/id/v1', {
-              success(respText) {
-                let encodedId;
-                if (respText) {
-                  // encode the Id per DigiTrust lib
-                  try {
-                    encodedId = btoa(respText);
-                  } catch (e) {}
+        }
+        return true;
+      }
+      return false;
+    }
+
+    const MAX_RETRIES = 4;
+    let retries = 0;
+    const getUserResult = testDigiTrust();
+
+    if (getUserResult && typeof getUserResult === 'string') {
+      return getUserResult;
+    } else {
+      return function getIdAsync(callback) {
+        function pollFramework () {
+          if (!testDigiTrust(callback)) {
+            if (retries < MAX_RETRIES) {
+              retries++;
+              // set timeout with extended time to check for the DigiTrust frame work
+              setTimeout(pollFramework, 100 * (1 + retries));
+            } else {
+              // failed to find the framework,
+              // try to load a id using the DigiTrust web api
+              ajax('https://cdn-cf.digitru.st/id/v1', {
+                success (respText) {
+                  let encodedId;
+                  if (respText) {
+                    // encode the Id per DigiTrust lib
+                    try {
+                      encodedId = btoa(respText);
+                    } catch (e) {}
+                  }
+                  // execute callback to notify async is complete
+                  callback(encodedId);
+                }, error (message) {
+                  // failure getting id fromm api, execute callback to notify async is complete
+                  utils.logError(`${MODULE_NAME} - DigiTrustId API error: ${message}`);
+                  callback();
                 }
-                // execute callback to notify async is complete
-                callback(encodedId);
-              },
-              error(message) {
-                // failure getting id fromm api, execute callback to notify async is complete
-                utils.logError(`${MODULE_NAME} - DigiTrustId API error: ${message}`);
-                callback();
-              }
-            }, undefined, {method: 'GET'});
+              }, undefined, {method: 'GET'});
+            }
           }
         }
+
+        pollFramework(callback);
       }
-      initDigiTrust();
     }
   }
 }
