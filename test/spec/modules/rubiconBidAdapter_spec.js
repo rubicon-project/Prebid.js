@@ -1965,9 +1965,6 @@ describe('the rubicon adapter', function () {
           expect(bids[0].cpm).to.equal(2);
           expect(bids[0].ttl).to.equal(300);
           expect(bids[0].netRevenue).to.equal(false);
-          console.log('bids[0] used to be checking vastUrl:', bids[0]);
-          // expect(bids[0].vastUrl).to.equal('0c498f63-5111-4bed-98e2-9be7cb932a64');
-          // expect(bids[0].videoCacheKey).to.equal('0c498f63-5111-4bed-98e2-9be7cb932a64');
           expect(bids[0].adserverTargeting).to.deep.equal({hb_uuid: '0c498f63-5111-4bed-98e2-9be7cb932a64'});
           expect(bids[0].mediaType).to.equal('video');
           expect(bids[0].bidderCode).to.equal('rubicon');
