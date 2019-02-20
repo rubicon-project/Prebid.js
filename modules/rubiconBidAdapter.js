@@ -442,16 +442,27 @@ export const spec = {
 
           if (utils.deepAccess(bid, 'ext.prebid.type') === VIDEO) {
             bidObject.mediaType = VIDEO;
-            if (bid.adm) {
-              bidObject.vastXml = bid.adm;
-            }
-            if (bid.nurl) {
-              bidObject.vastUrl = bid.nurl;
+            const extPrebidTargeting = utils.deepAccess(bid, 'ext.prebid.targeting');
+
+            // If ext.prebid.targeting exists, add it as a property value named 'adserverTargeting'
+            if (extPrebidTargeting && typeof extPrebidTargeting === 'object') {
+              bidObject.adserverTargeting = extPrebidTargeting;
             }
 
-            if (utils.deepAccess(bid, 'ext.prebid.targeting')) {
-              bidObject.adserverTargeting = bid.ext.prebid.targeting;
+            // try to get cache values from 'response.ext.prebid.cache'
+            // else try 'bid.ext.prebid.targeting' as fallback
+            if (bid.ext.prebid.cache && typeof bid.ext.prebid.cache.vastXml === 'object' && bid.ext.prebid.cache.vastXml.cacheId && bid.ext.prebid.cache.vastXml.url) {
+              bidObject.videoCacheKey = bid.ext.prebid.cache.vastXml.cacheId;
+              bidObject.vastUrl = bid.ext.prebid.cache.vastXml.url;
+            } else if (extPrebidTargeting && extPrebidTargeting.hb_uuid && extPrebidTargeting.hb_cache_host && extPrebidTargeting.hb_cache_path) {
+              bidObject.videoCacheKey = extPrebidTargeting.hb_uuid;
+              // build url using key and cache host
+              bidObject.vastUrl = `https://${extPrebidTargeting.hb_cache_host}${extPrebidTargeting.hb_cache_path}?uuid=${extPrebidTargeting.hb_uuid}`;
             }
+
+            if (bid.adm) { bidObject.vastXml = bid.adm; }
+            if (bid.nurl) { bidObject.vastUrl = bid.nurl; }
+            if (!bidObject.vastUrl && bid.nurl) { bidObject.vastUrl = bid.nurl; }
 
             const videoCacheKey = utils.deepAccess(bid, 'ext.prebid.targeting.hb_uuid');
             if (videoCacheKey) {
