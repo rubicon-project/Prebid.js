@@ -102,7 +102,7 @@ export const spec = {
         return false
       }
     }
-    return !!bidType(bid, true)
+    return !!bidType(bid, true);
   },
   /**
    * @param {BidRequest[]} bidRequests
