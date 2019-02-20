@@ -141,9 +141,7 @@ export const spec = {
             },
             targeting: {
               includewinners: true,
-              priceGranularity: (config.getConfig('priceGranularity') === 'custom') ? {
-                ranges: config.getConfig('customPriceGranularity').buckets
-              } : config.getConfig('priceGranularity')
+              priceGranularity: getPriceGranularity(config)
             }
           }
         }
@@ -843,6 +841,29 @@ export function determineRubiconVideoSizeId(bid) {
   // otherwise 203 for outstream and 201 for instream
   // When this function is used we know it has to be one of outstream or instream
   return utils.deepAccess(bid, `mediaTypes.${VIDEO}.context`) === 'outstream' ? 203 : 201;
+}
+
+export function getPriceGranularity(config) {
+  const granularityMappings = {
+    low: [{max: 5.00, increment: 0.50}],
+    medium: [{max: 20.00, increment: 0.10}],
+    high: [{max: 20.00, increment: 0.01}],
+    auto: [
+      {max: 5.00, increment: 0.05},
+      {min: 5.00, max: 10.00, increment: 0.10},
+      {min: 10.00, max: 20.00, increment: 0.50}
+    ],
+    dense: [
+      {max: 3.00, increment: 0.01},
+      {min: 3.00, max: 8.00, increment: 0.05},
+      {min: 8.00, max: 20.00, increment: 0.50}
+    ]
+  }
+  if (config.getConfig('priceGranularity') === 'custom') {
+    return {ranges: config.getConfig('customPriceGranularity').buckets}
+  } else {
+    return {ranges: granularityMappings[config.getConfig('priceGranularity')]}
+  }
 }
 
 var hasSynced = false;
