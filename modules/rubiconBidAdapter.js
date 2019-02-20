@@ -463,12 +463,6 @@ export const spec = {
             if (bid.adm) { bidObject.vastXml = bid.adm; }
             if (bid.nurl) { bidObject.vastUrl = bid.nurl; }
             if (!bidObject.vastUrl && bid.nurl) { bidObject.vastUrl = bid.nurl; }
-
-            const videoCacheKey = utils.deepAccess(bid, 'ext.prebid.targeting.hb_uuid');
-            if (videoCacheKey) {
-              bidObject.vastUrl = videoCacheKey;
-              bidObject.videoCacheKey = videoCacheKey;
-            }
           } else {
             utils.logError('Prebid Server Java openRTB returns response with media type other than video for video request.');
           }
