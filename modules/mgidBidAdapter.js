@@ -142,7 +142,6 @@ export const spec = {
         /\$\{AUCTION_PRICE\}/,
         cpm
       );
-      pixel(bid.nurl);
     };
     if (bid.isBurl) {
       bid.ad = bid.ad.replace(
@@ -215,10 +214,6 @@ function extractDomainFromHost(pageHost) {
     domain = null;
   }
   return domain;
-}
-
-function pixel(url) {
-  (document.createElement('IMG')).src = url;
 }
 
 function getLanguage() {
