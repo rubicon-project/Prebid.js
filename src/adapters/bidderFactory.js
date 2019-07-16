@@ -143,8 +143,12 @@ export function registerBidder(spec) {
     ? { supportedMediaTypes: spec.supportedMediaTypes }
     : undefined;
   function putBidder(spec) {
-    const bidder = newBidder(spec);
-    adapterManager.registerBidAdapter(bidder, spec.code, mediaTypes);
+    try {
+      const bidder = newBidder(spec);
+      adapterManager.registerBidAdapter(bidder, spec.code, mediaTypes);
+    } catch (e) {
+      utils.logError('failed to register bid adapter.', e);
+    }
   }
 
   putBidder(spec);
