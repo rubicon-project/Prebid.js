@@ -343,6 +343,11 @@ const OPEN_RTB_PROTOCOL = {
     let imps = [];
     let aliases = {};
 
+    // get some floors yo
+    let floorData;
+    if (utils.deepAccess(bidRequests, '0.bids.0.getFloor')) {
+      floorData = bidRequests[0].bids[0].getFloor();
+    }
     // transform ad unit into array of OpenRTB impression objects
     adUnits.forEach(adUnit => {
       const nativeParams = processNativeAdUnitParams(utils.deepAccess(adUnit, 'mediaTypes.native'));

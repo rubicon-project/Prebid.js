@@ -183,7 +183,20 @@ export const spec = {
         }
       }
 
-      const bidFloor = parseFloat(utils.deepAccess(bidRequest, 'params.floor'));
+      let bidFloor;
+      if (bidRequest.getFloor) {
+        let floorInfo = bidRequest.getFloor({
+          currency: 'USD',
+          mediaType: 'video',
+          size: '*'
+        });
+        bidFloor = floorInfo.currency === 'USD' ? floorInfo.floor : undefined;
+      } else {
+        bidFloor = parseFloat(utils.deepAccess(bidRequest, 'params.floor'));
+      }
+      if (config.getConfig('rubicon.disableFloors')) {
+        bidFloor = undefined;
+      }
       if (!isNaN(bidFloor)) {
         data.imp[0].bidfloor = bidFloor;
       }
@@ -455,6 +468,19 @@ export const spec = {
       'rf': _getPageUrl(bidRequest, bidderRequest)
     };
 
+    // If Floors module is enabled and we get USD floor back, send it in rp_hard_floor else undfined
+    if (bidRequest.getFloor) {
+      let floorInfo = bidRequest.getFloor({
+        currency: 'USD',
+        mediaType: 'banner',
+        size: '*'
+      });
+      data['rp_hard_floor'] = floorInfo.currency === 'USD' ? floorInfo.floor : undefined;
+    }
+
+    if (config.getConfig('rubicon.disableFloors')) {
+      data['rp_hard_floor'] = undefined;
+    }
     // add p_pos only if specified and valid
     // For SRA we need to explicitly put empty semi colons so AE treats it as empty, instead of copying the latter value
     data['p_pos'] = (params.position === 'atf' || params.position === 'btf') ? params.position : '';

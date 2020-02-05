@@ -14,7 +14,8 @@ const {
     BIDDER_DONE,
     BID_TIMEOUT,
     BID_WON,
-    SET_TARGETING
+    SET_TARGETING,
+    FLOOR_NOT_MET
   },
   STATUS: {
     GOOD,
@@ -391,6 +392,9 @@ let rubiconAdapter = Object.assign({}, baseAdapter, {
           ]);
           return memo;
         }, {}));
+        break;
+      case FLOOR_NOT_MET:
+        console.log('THE FLOOR NOT MET ARGS ARE: ', args);
         break;
       case BID_RESPONSE:
         let bid = cache.auctions[args.auctionId].bids[args.requestId];

@@ -1,3 +1,4 @@
+import { getGlobal } from '../src/prebidGlobal';
 import { createBid } from '../src/bidfactory';
 import { STATUS } from '../src/constants';
 import { ajax } from '../src/ajax';
@@ -95,7 +96,8 @@ export function setConfig(config) {
       url = `${url.substring(0, macroLocation)}${todaysDate}${url.substring(macroLocation + 9, url.length)}`;
     }
 
-    initCurrency(url);
+    // new option to add a bidRequest hook to add currency conversion ability on the bidRequest Objects
+    initCurrency(url, config.addBidRequestHook);
   } else {
     // currency support is disabled, setting defaults
     utils.logInfo('disabling currency support');
@@ -116,12 +118,34 @@ function errorSettingsRates(msg) {
   }
 }
 
-function initCurrency(url) {
+/**
+ *
+ * @param {Object} reqBidsConfigObj required; This is the same param that's used in pbjs.requestBids.
+ * @param {function} fn required; The next function in the chain, used by hook.js
+ */
+export function requestBidsHook(fn, reqBidsConfigObj) {
+  // loop through adUnits and add getCpmInNewCurrency to the bids
+  let adUnits = reqBidsConfigObj.adUnits || getGlobal().adUnits;
+  adUnits.forEach(adUnit => {
+    adUnit.bids.forEach(bid => bid.convertCurrency = (cpm, fromCurrency, toCurrency) => {
+      return (parseFloat(cpm) * getCurrencyConversion(fromCurrency, toCurrency));
+    });
+  });
+
+  // continue auction
+  fn.apply(this, [reqBidsConfigObj]);
+};
+
+function initCurrency(url, addBidRequestHook) {
   conversionCache = {};
   currencySupportEnabled = true;
 
   utils.logInfo('Installing addBidResponse decorator for currency module', arguments);
 
+  // Adding conversion function to bidRequestObjects
+  if (addBidRequestHook) {
+    getGlobal().requestBids.before(requestBidsHook, 100);
+  }
   getHook('addBidResponse').before(addBidResponseHook, 100);
 
   // call for the file if we haven't already
@@ -149,6 +173,7 @@ function resetCurrency() {
   utils.logInfo('Uninstalling addBidResponse decorator for currency module', arguments);
 
   getHook('addBidResponse').getHooks({hook: addBidResponseHook}).remove();
+  getGlobal().requestBids.getHooks({hook: requestBidsHook}).remove();
 
   adServerCurrency = 'USD';
   conversionCache = {};
