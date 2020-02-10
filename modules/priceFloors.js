@@ -5,6 +5,7 @@ import { ajaxBuilder } from '../src/ajax';
 import events from '../src/events';
 import CONSTANTS from '../src/constants.json';
 import { getHook } from '../src/hook.js';
+import { createBid } from '../src/bidfactory';
 
 /**
  * This Module is intended to provide users with the ability to
@@ -178,9 +179,9 @@ export function generatePossibleEnumerations(arrayOfFields, delimiter) {
 export function getBiddersCpmAdjustment(bidderName, inputCpm) {
   const adjustmentFunction = utils.deepAccess(getGlobal(), `bidderSettings.${bidderName}.bidCpmAdjustment`);
   if (adjustmentFunction) {
-    return adjustmentFunction(inputCpm);
+    return parseFloat(adjustmentFunction(inputCpm));
   }
-  return inputCpm;
+  return parseFloat(inputCpm);
 };
 
 /**
@@ -210,9 +211,7 @@ function updateFloorDataForPBS(floorData) {
 export function getFloor(requestParams = {}) {
   let floorData = _floorDataForAuction[this.auctionId];
 
-  if (floorData.skipped) {
-    return {};
-  } else if (this.src === 's2s') {
+  if (this.src === 's2s') {
     return updateFloorDataForPBS(floorData);
   }
 
@@ -283,6 +282,7 @@ export function convertRulesToHash(floorData, adUnitCode) {
  * @param {object} adUnits The adUnits for this auction
  */
 export function updateAdUnitsForAuction(adUnits) {
+  let newRules;
   let resolvedFloorsData = utils.deepClone(_floorsConfig);
   resolvedFloorsData.skipped = false;
 
@@ -309,7 +309,7 @@ export function updateAdUnitsForAuction(adUnits) {
         if (index === 0) {
           resolvedFloorsData.data = getFloorsDataForAuction(adUnit.floors, adUnit.code);
         } else {
-          let newRules = getFloorsDataForAuction(adUnit.floors, adUnit.code).rules;
+          newRules = getFloorsDataForAuction(adUnit.floors, adUnit.code).rules;
           Object.assign(resolvedFloorsData.data.rules, newRules);
         }
       }
@@ -336,19 +336,22 @@ export function createFloorsDataForAuction(adUnits) {
   // determine the skip rate now
   const skipRate = utils.deepAccess(_floorsConfig, 'data.skipRate') || _floorsConfig.skipRate || 0;
   if (shouldSkipFloors(skipRate)) {
-    // loop through adUnits and remove getFloor if it's there and add floor info
+    // loop through adUnits and remove getFloor if it's there (re-used adUnits scenario) and add floor info
     adUnits.forEach(adUnit => {
-      adUnit.bids.forEach(bid => bid.floorData = {
-        skipped: true,
-        modelVersion: utils.deepAccess(_floorsConfig, 'data.modelVersion') || _floorsConfig.modelVersion || '',
-        location: _floorsConfig.location
+      adUnit.bids.forEach(bid => {
+        bid.floorData = {
+          skipped: true,
+          modelVersion: utils.deepAccess(_floorsConfig, 'data.modelVersion') || _floorsConfig.modelVersion || '',
+          location: _floorsConfig.location
+        };
+        delete bid.getFloor;
       });
     });
     return {
       skipped: true
     };
   }
-  // default stuff that is necessary no matter what
+  // else we are flooring
   return updateAdUnitsForAuction(adUnits);
 };
 
@@ -564,6 +567,13 @@ function addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm) {
   });
 }
 
+function shouldFloorBid(floorData, floorInfo, bid) {
+  let enforceJS = utils.deepAccess(floorData, 'enforcement.enforceJS') !== false;
+  let shouldFloorDeal = utils.deepAccess(floorData, 'enforcement.floorDeals') === true && !bid.dealId;
+  let bidBelowFloor = floorInfo.adjustedCpm < floorInfo.matchingFloor;
+  return enforceJS && (bidBelowFloor && shouldFloorDeal);
+}
+
 export function addBidResponseHook(fn, adUnitCode, bid) {
   let floorData = _floorDataForAuction[this.bidderRequest.auctionId];
 
@@ -593,23 +603,30 @@ export function addBidResponseHook(fn, adUnitCode, bid) {
       utils.logError(`${MODULE_NAME}: Currency module is required if any bidResponse currency differs from floors currency`);
       return fn.call(this, adUnitCode, bid);
     }
-    adjustedCpm = bid.getCpmInNewCurrency(floorData.data.currency.toUpperCase());
+    adjustedCpm = parseFloat(bid.getCpmInNewCurrency(floorData.data.currency.toUpperCase()));
   }
-
-  adjustedCpm = parseFloat(adjustedCpm);
   // add floor data to bid for analytics adapters to use
   addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm);
 
   // now do the compare!
-  if (!floorData.enforcement.enforceJS && ((adjustedCpm < floorInfo.matchingFloor) && (floorData.enforcement.floorDeals || !bid.dealId))) {
-    // bid fails floor set! throw it out
-    // add floorInfo onto bid object
-    // emit floorNotMet event
-    bid.status = 'floorNotMet';
-    // if floor not met update bid with adjustedCpm
-    bid.cpm = adjustedCpm;
-    events.emit(CONSTANTS.EVENTS.FLOOR_NOT_MET, bid);
-    return;
+  if (shouldFloorBid(floorData, floorInfo, bid)) {
+    // bid fails floor -> throw it out
+    // create basic bid no-bid with necessary data fro analytics adapters
+    let flooredBid = createBid(CONSTANTS.STATUS.NO_BID, matchingBidRequest);
+    Object.assign(flooredBid, utils.pick(bid, [
+      'floorData',
+      'width',
+      'height',
+      'mediaType',
+      'currency',
+      'originalCpm',
+      'originalCurrency',
+      'getCpmInNewCurrency',
+    ]));
+    flooredBid.status = 'floorNotMet';
+    // if floor not met update bid with 0 cpm so it is not included downstream and marked as no-bid
+    flooredBid.cpm = 0;
+    return fn.call(this, adUnitCode, flooredBid);
   }
   return fn.call(this, adUnitCode, bid);
 }

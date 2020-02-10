@@ -14,12 +14,14 @@ const {
     BIDDER_DONE,
     BID_TIMEOUT,
     BID_WON,
-    SET_TARGETING,
-    FLOOR_NOT_MET
+    SET_TARGETING
   },
   STATUS: {
     GOOD,
     NO_BID
+  },
+  BID_STATUS: {
+    FLOOR_NOT_MET
   }
 } = CONSTANTS;
 
@@ -91,7 +93,8 @@ function sendMessage(auctionId, bidWonId) {
         'bidPriceUSD',
         'dealId',
         'dimensions',
-        'mediaType'
+        'mediaType',
+        'floorEnforced'
       ]) : undefined
     ]);
   }
@@ -132,7 +135,10 @@ function sendMessage(auctionId, bidWonId) {
           'transactionId',
           'mediaTypes',
           'dimensions',
-          'adserverTargeting', () => stringProperties(cache.targeting[bid.adUnit.adUnitCode] || {})
+          'adserverTargeting', () => stringProperties(cache.targeting[bid.adUnit.adUnitCode] || {}),
+          'floorLocation',
+          'modelName',
+          'skippedFloors'
         ]);
         adUnit.bids = [];
       }
@@ -211,6 +217,10 @@ function sendMessage(auctionId, bidWonId) {
 }
 
 function getBidPrice(bid) {
+  // if a floor not met was called then retrieve bidPriceUSD from floorData.adjustedCpm
+  if (bid.status === FLOOR_NOT_MET) {
+    Number(bid.floorData.adjustedCpm);
+  }
   if (typeof bid.currency === 'string' && bid.currency.toUpperCase() === 'USD') {
     return Number(bid.cpm);
   }
@@ -238,6 +248,7 @@ export function parseBidResponse(bid, previousBidResponse) {
       'height'
     ]),
     'seatBidId',
+    'floorEnforced', () => utils.deepAccess(bid, 'floorData.floorEnforced')
   ]);
 }
 
@@ -387,17 +398,21 @@ let rubiconAdapter = Object.assign({}, baseAdapter, {
                   return Object.keys(types).filter(validMediaType);
                 }
                 return ['banner'];
-              }
+              },
+              'floorLocation', () => utils.deepAccess(bid, 'floorData.location'),
+              'modelName', () => utils.deepAccess(bid, 'floorData.modelVersion'),
+              'skippedFloors', () => utils.deepAccess(bid, 'floorData.skipped'),
             ])
           ]);
           return memo;
         }, {}));
         break;
-      case FLOOR_NOT_MET:
-        console.log('THE FLOOR NOT MET ARGS ARE: ', args);
-        break;
       case BID_RESPONSE:
         let bid = cache.auctions[args.auctionId].bids[args.requestId];
+        // If floor resolved gptSlot but we have not yet, then update the adUnit to have the adSlot name
+        if (utils.deepAccess(args, 'floorData.gptSlot') && !utils.deepAccess(bid, 'adUnit.adSlot')) {
+          bid.adUnit.adSlot = args.floorData.gptSlot;
+        }
         if (!bid) {
           utils.logError('Rubicon Anlytics Adapter Error: Could not find associated bid request for bid response with requestId: ', args.requestId);
           break;
@@ -409,7 +424,7 @@ let rubiconAdapter = Object.assign({}, baseAdapter, {
             delete bid.error; // it's possible for this to be set by a previous timeout
             break;
           case NO_BID:
-            bid.status = 'no-bid';
+            bid.status = args.status === FLOOR_NOT_MET ? FLOOR_NOT_MET : 'no-bid';
             delete bid.error;
             break;
           default:
