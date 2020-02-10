@@ -18,8 +18,7 @@ const {
     BIDDER_DONE,
     SET_TARGETING,
     AD_RENDER_FAILED,
-    ADD_AD_UNITS,
-    FLOOR_NOT_MET
+    ADD_AD_UNITS
   }
 } = CONSTANTS;
 
@@ -105,7 +104,6 @@ export default function AnalyticsAdapter({ url, analyticsType, global, handler }
         [REQUEST_BIDS]: args => this.enqueue({ eventType: REQUEST_BIDS, args }),
         [BID_REQUESTED]: args => this.enqueue({ eventType: BID_REQUESTED, args }),
         [BID_RESPONSE]: args => this.enqueue({ eventType: BID_RESPONSE, args }),
-        [FLOOR_NOT_MET]: args => this.enqueue({ eventType: FLOOR_NOT_MET, args }),
         [NO_BID]: args => this.enqueue({ eventType: NO_BID, args }),
         [BID_TIMEOUT]: args => this.enqueue({ eventType: BID_TIMEOUT, args }),
         [BID_WON]: args => this.enqueue({ eventType: BID_WON, args }),
