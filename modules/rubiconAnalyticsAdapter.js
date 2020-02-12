@@ -21,7 +21,7 @@ const {
     NO_BID
   },
   BID_STATUS: {
-    FLOOR_NOT_MET
+    BID_REJECTED
   }
 } = CONSTANTS;
 

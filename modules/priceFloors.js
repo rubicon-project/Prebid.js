@@ -554,7 +554,7 @@ export function addBidResponseHook(fn, adUnitCode, bid) {
       'originalCurrency',
       'getCpmInNewCurrency',
     ]));
-    flooredBid.status = 'floorNotMet';
+    flooredBid.status = 'bidRejected';
     // if floor not met update bid with 0 cpm so it is not included downstream and marked as no-bid
     flooredBid.cpm = 0;
     return fn.call(this, adUnitCode, flooredBid);
