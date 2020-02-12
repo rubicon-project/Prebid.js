@@ -138,7 +138,8 @@ function sendMessage(auctionId, bidWonId) {
           'adserverTargeting', () => stringProperties(cache.targeting[bid.adUnit.adUnitCode] || {}),
           'floorLocation',
           'modelName',
-          'skippedFloors'
+          'skippedFloors',
+          'adSlot'
         ]);
         adUnit.bids = [];
       }
@@ -219,7 +220,7 @@ function sendMessage(auctionId, bidWonId) {
 function getBidPrice(bid) {
   // if a floor not met was called then retrieve bidPriceUSD from floorData.adjustedCpm
   if (bid.status === FLOOR_NOT_MET) {
-    Number(bid.floorData.adjustedCpm);
+    return Number(bid.floorData.adjustedCpm);
   }
   if (typeof bid.currency === 'string' && bid.currency.toUpperCase() === 'USD') {
     return Number(bid.cpm);
