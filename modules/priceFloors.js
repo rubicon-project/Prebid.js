@@ -175,7 +175,7 @@ export function getFloor(requestParams = {}) {
   let floorData = _floorDataForAuction[this.auctionId];
   if (!floorData || floorData.skipped) return {};
 
-  let floorInfo = getFirstMatchingFloor(floorData.data, this, requestParams);
+  let floorInfo = getFirstMatchingFloor(floorData.data, this, requestParams.mediaType || 'banner', requestParams.size || '*');
   let currency = requestParams.currency || floorData.currency;
 
   // if bidder asked for a currency which is not what floors are set in convert
@@ -517,7 +517,7 @@ export function addBidResponseHook(fn, adUnitCode, bid) {
   let mediaType = bid.mediaType || 'banner';
   let size = [bid.width, bid.height];
   const matchingBidRequest = this.bidderRequest.bids.find(bidRequest => bidRequest.bidId === bid.requestId);
-  let floorInfo = getFirstMatchingFloor(floorData.data, matchingBidRequest, {mediaType, size});
+  let floorInfo = getFirstMatchingFloor(floorData.data, matchingBidRequest, mediaType, size);
 
   if (!floorInfo.matchingFloor) {
     utils.logWarn(`${MODULE_NAME}: unable to determine a matching price floor for bidResponse ${bid}`);
