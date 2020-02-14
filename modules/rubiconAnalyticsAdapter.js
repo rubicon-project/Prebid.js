@@ -219,7 +219,7 @@ function sendMessage(auctionId, bidWonId) {
 
 function getBidPrice(bid) {
   // if a floor not met was called then retrieve bidPriceUSD from floorData.adjustedCpm
-  if (bid.status === FLOOR_NOT_MET) {
+  if (bid.status === BID_REJECTED) {
     return Number(bid.floorData.adjustedCpm);
   }
   if (typeof bid.currency === 'string' && bid.currency.toUpperCase() === 'USD') {
@@ -411,8 +411,8 @@ let rubiconAdapter = Object.assign({}, baseAdapter, {
       case BID_RESPONSE:
         let bid = cache.auctions[args.auctionId].bids[args.requestId];
         // If floor resolved gptSlot but we have not yet, then update the adUnit to have the adSlot name
-        if (utils.deepAccess(args, 'floorData.gptSlot') && !utils.deepAccess(bid, 'adUnit.adSlot')) {
-          bid.adUnit.adSlot = args.floorData.gptSlot;
+        if (!utils.deepAccess(bid, 'adUnit.adSlot') && utils.deepAccess(args, 'floorData.matchedFields.gptSlot')) {
+          bid.adUnit.adSlot = args.floorData.matchedFields.gptSlot;
         }
         if (!bid) {
           utils.logError('Rubicon Anlytics Adapter Error: Could not find associated bid request for bid response with requestId: ', args.requestId);
@@ -425,7 +425,7 @@ let rubiconAdapter = Object.assign({}, baseAdapter, {
             delete bid.error; // it's possible for this to be set by a previous timeout
             break;
           case NO_BID:
-            bid.status = args.status === FLOOR_NOT_MET ? FLOOR_NOT_MET : 'no-bid';
+            bid.status = args.status === BID_REJECTED ? BID_REJECTED : 'no-bid';
             delete bid.error;
             break;
           default:

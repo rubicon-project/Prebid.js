@@ -6,6 +6,7 @@ import events from '../src/events';
 import CONSTANTS from '../src/constants.json';
 import { getHook } from '../src/hook.js';
 import { createBid } from '../src/bidfactory';
+import find from 'core-js/library/fn/array/find';
 
 /**
  * @summary This Module is intended to provide users with the ability to dynamically set and enforce price floors on a per auction basis.
@@ -20,76 +21,47 @@ const ajax = ajaxBuilder(10000);
 /**
  * @summary Allowed fields for rules to have
  */
-let allowedFields = ['gptSlot', 'adUnitCode', 'size', 'domain', 'mediaType'];
+const allowedFields = ['gptSlot', 'adUnitCode', 'size', 'domain', 'mediaType'];
 
 /**
  * @summary This is a flag to indicate if a AJAX call is processing for a floors request
 */
-let fetching = false;
+var fetching = false;
 
 /**
  * @summary so we only register for our hooks once
 */
-let addedFloorsHook = false;
+var addedFloorsHook = false;
 
 /**
  * @summary The config to be used. Can be updated via: setConfig or a real time fetch
  */
-let _floorsConfig = {
-  auctionDelay: 0,
-  enforcement: { // enforcement flags which alter the way price floors will be enforced or not
-    enforceJS: true, // Wether to enforce the derived floor per bidResponse or ignore
-    enforcePBS: false, // Sends a flag to PBS which has it do flooring on the server
-    floorDeals: false, // Signals if bidResponses containing dealId's are adherendt to flooring
-    bidAdjustment: false, // Signals wether the getFloors function should take into account the bidders CPM Adjustment when returning a floor value
-  },
-};
+var _floorsConfig = {};
 
 /**
  * @summary If a auction is to be delayed by an ongoing fetch we hold it here until it can be resumed
  */
-let _delayedAuctions = [];
+var _delayedAuctions = [];
 
 /**
  * @summary Each auction can have differing floors data depending on execution time or per adunit setup
  * So we will be saving each auction offset by it's auctionId in order to make sure data is not changed
  * Once the auction commences
  */
-let _floorDataForAuction = {};
+export var _floorDataForAuction = {};
 
 /**
  * @summary Simple function to round up to a certain decimal degree
  */
 function roundUp(number, precision) {
-  return Math.ceil(number * Math.pow(10, precision)) / Math.pow(10, precision);
+  return Math.ceil(parseFloat(number) * Math.pow(10, precision)) / Math.pow(10, precision);
 }
-
-/**
- * @summary Uses the adUnit's code in order to find a matching gptSlot on the page
- */
-export function getGptSlotInfoForAdUnit(adUnitCode) {
-  let matchingSlot;
-  if (window.googletag && window.googletag.apiReady) {
-    // find the first matching gpt slot on the page
-    matchingSlot = window.googletag.pubads().getSlots().find(slot => {
-      return (adUnitCode === slot.getAdUnitPath() || adUnitCode === slot.getSlotElementId())
-    });
-  }
-  if (matchingSlot) {
-    return {
-      gptSlot: matchingSlot.getAdUnitPath(),
-      divId: matchingSlot.getSlotElementId()
-    }
-  }
-  utils.logError(`${MODULE_NAME}: The GPT API must be ready and slots defined when using 'gptSlot' as one of the floor fields`);
-  return {};
-};
 
 /**
  * @summary floor field types with their matching functions to resolve the actual matched value
  */
 const fieldMatchingFunctions = {
-  'gptSlot': bidObject => getGptSlotInfoForAdUnit(bidObject.adUnitCode).gptSlot,
+  'gptSlot': bidObject => utils.getGptSlotInfoForAdUnitCode(bidObject.adUnitCode).gptSlot,
   'domain': () => window.location.hostname,
   'adUnitCode': bidObject => bidObject.adUnitCode
 };
@@ -99,11 +71,11 @@ const fieldMatchingFunctions = {
  * a "*" catch-all match
  * Returns array of Tuple [exact match, catch all] for each field in rules file
  */
-export function enumeratePossibleFieldValues(floorData, bidObject, mediaType, size) {
+function enumeratePossibleFieldValues(floorFields, bidObject, mediaType, size) {
   // enumerate possible matches
   size = utils.parseGPTSingleSizeArray(size) || '*';
 
-  return floorData.schema.fields.reduce((accum, field) => {
+  return floorFields.reduce((accum, field) => {
     let exactMatch;
     if (field === 'size') {
       exactMatch = size;
@@ -123,21 +95,22 @@ export function enumeratePossibleFieldValues(floorData, bidObject, mediaType, si
  * Generates all possible rule matches and picks the first matching one.
  */
 export function getFirstMatchingFloor(floorData, bidObject, mediaType, size) {
-  let fieldValues = enumeratePossibleFieldValues(floorData, bidObject, mediaType, size);
-  if (!fieldValues) return { matchingFloor: floorData.default };
-  let allPossibleMatches = generatePossibleEnumerations(fieldValues, floorData.delimiter);
-  let matchingRule = allPossibleMatches.find(hashValue => floorData.values.hasOwnProperty(hashValue));
+  let fieldValues = enumeratePossibleFieldValues(utils.deepAccess(floorData, 'schema.fields') || [], bidObject, mediaType, size);
+  if (!fieldValues.length) return { matchingFloor: floorData.default };
+  let allPossibleMatches = generatePossibleEnumerations(fieldValues, utils.deepAccess(floorData, 'schema.delimiter') || '|');
+  let matchingRule = find(allPossibleMatches, hashValue => floorData.values.hasOwnProperty(hashValue));
 
   return {
     matchingFloor: floorData.values[matchingRule] || floorData.default,
-    matchingData: allPossibleMatches[0] // the first possible match is an "exact" so contains all data relevant for anlaytics adapters
+    matchingData: allPossibleMatches[0], // the first possible match is an "exact" so contains all data relevant for anlaytics adapters
+    matchingRule
   }
 };
 
 /**
  * @summary Generates all possible rule hash's based on input array of array's
  */
-export function generatePossibleEnumerations(arrayOfFields, delimiter) {
+function generatePossibleEnumerations(arrayOfFields, delimiter) {
   return arrayOfFields.reduce((accum, currentVal) => {
     let ret = [];
     accum.map(obj => {
@@ -197,7 +170,7 @@ export function getFloor(requestParams = {}) {
 
   if (floorInfo.matchingFloor) {
     return {
-      floor: roundUp(parseFloat(parseFloat(floorInfo.matchingFloor).toFixed(5)), 4),
+      floor: roundUp(floorInfo.matchingFloor, 4),
       currency,
     };
   }
@@ -209,7 +182,7 @@ export function getFloor(requestParams = {}) {
  */
 export function getFloorsDataForAuction(floorData, adUnitCode) {
   let auctionFloorData = utils.deepClone(floorData);
-  auctionFloorData.delimiter = floorData.delimiter || '|';
+  auctionFloorData.schema.delimiter = floorData.schema.delimiter || '|';
   auctionFloorData.values = convertRulesToHash(auctionFloorData, adUnitCode);
   // default the currency to USD if not passed in
   auctionFloorData.currency = auctionFloorData.currency || 'USD';
@@ -219,9 +192,9 @@ export function getFloorsDataForAuction(floorData, adUnitCode) {
 /**
  * @summary Flattens the provided values array into an object with {KEY: FLOOR}
  */
-export function convertRulesToHash(floorData, adUnitCode) {
+function convertRulesToHash(floorData, adUnitCode) {
   let fields = floorData.schema.fields;
-  let delimiter = floorData.delimiter
+  let delimiter = floorData.schema.delimiter
 
   // if we are building the floor data form an ad unit, we need to append adUnit code as to not cause collisions
   let prependAdUnit = adUnitCode && !fields.includes('adUnitCode') && fields.unshift('adUnitCode');
@@ -255,7 +228,7 @@ export function updateAdUnitsForAuction(adUnits) {
       bid.floorData = {
         skipped: false,
         modelVersion: utils.deepAccess(resolvedFloorsData, 'data.modelVersion') || '',
-        location: useAdUnitData ? 'adUnit' : resolvedFloorsData.location,
+        location: useAdUnitData ? 'adUnit' : resolvedFloorsData.data.location,
       }
     });
 
@@ -283,7 +256,7 @@ export function updateAdUnitsForAuction(adUnits) {
  */
 export function createFloorsDataForAuction(adUnits) {
   // determine the skip rate now
-  const skipRate = utils.deepAccess(_floorsConfig, 'data.skipRate') || _floorsConfig.skipRate || 0;
+  const skipRate = utils.deepAccess(_floorsConfig, 'data.skipRate') || 0;
   if (Math.random() * 100 < skipRate) {
     // loop through adUnits and remove getFloor if it's there (re-used adUnits scenario) and add floor info
     adUnits.forEach(adUnit => {
@@ -291,7 +264,7 @@ export function createFloorsDataForAuction(adUnits) {
         bid.floorData = {
           skipped: true,
           modelVersion: utils.deepAccess(_floorsConfig, 'data.modelVersion') || '',
-          location: _floorsConfig.location
+          location: _floorsConfig.data.location
         };
         delete bid.getFloor;
       });
@@ -364,19 +337,20 @@ export function isFloorsDataValid(floorsData) {
   if (!validateSchemaFields(utils.deepAccess(floorsData, 'schema.fields'))) {
     return false;
   }
-  return validateRules(floorsData.values, floorsData.schema.fields.length, floorsData.delimiter || '|')
+  return validateRules(floorsData.values, floorsData.schema.fields.length, floorsData.schema.delimiter || '|')
 };
 
 /**
  * This function updates the global Floors Data field based on the new one passed in
  */
-export function updateGlobalFloorsData(floorsData, location) {
+export function parseFloorData(floorsData, location) {
   if (floorsData && typeof floorsData === 'object' && isFloorsDataValid(floorsData)) {
-    _floorsConfig.data = floorsData;
-    _floorsConfig.location = location;
-  } else {
-    utils.logError(`${MODULE_NAME}: The floors data did not contain correct values`, floorsData);
+    return {
+      ...floorsData,
+      location
+    };
   }
+  utils.logError(`${MODULE_NAME}: The floors data did not contain correct values`, floorsData);
 };
 
 /**
@@ -428,7 +402,7 @@ export function handleFetchResponse(fetchResponse) {
     floorResponse = fetchResponse;
   }
   // Update the global floors object according to the fetched data
-  updateGlobalFloorsData(floorResponse, 'fetch');
+  _floorsConfig.data = parseFloorData(floorResponse, 'fetch') || _floorsConfig.data;
 
   // if any auctions are waiting for fetch to finish, we need to continue them!
   resumeDelayedAuctions();
@@ -446,15 +420,15 @@ function handleFetchError(status) {
  * This function handles sending and recieving the AJAX call for a floors fetch
  * @param {object} floorsConfig the floors config coming from setConfig
  */
-export function generateAndHandleFetch(floorsConfig) {
+export function generateAndHandleFetch(floorEndpoint) {
   // if a fetch url is defined and one is not already occuring, fire it!
-  if (utils.deepAccess(floorsConfig, 'endpoint.url') && !fetching) {
+  if (floorEndpoint.url && !fetching) {
     // default to GET and we only support GET for now
-    let requestMethod = utils.deepAccess(floorsConfig, 'endpoint.method') || 'GET';
+    let requestMethod = floorEndpoint.method || 'GET';
     if (requestMethod !== 'GET') {
       utils.logError(`${MODULE_NAME}: 'GET' is the only request method supported at this time!`);
     } else {
-      ajax(floorsConfig.endpoint.url, { success: handleFetchResponse, error: handleFetchError }, null, { method: 'GET' });
+      ajax(floorEndpoint.url, { success: handleFetchResponse, error: handleFetchError }, null, { method: 'GET' });
       fetching = true;
     }
   } else if (fetching) {
@@ -465,37 +439,58 @@ export function generateAndHandleFetch(floorsConfig) {
 /**
  * @summary This is the function which controls what happens during a pbjs.setConfig({...floors: {}}) is called
  */
-function handleSetFloorsConfig(newFloorsConfig) {
-  // Update our internal top level config with the passed in config
-  Object.assign(_floorsConfig, newFloorsConfig); // TODO: this is temp for testing will expand later
+export function handleSetFloorsConfig(config) {
+  _floorsConfig = utils.pick(config, [
+    'enabled', enabled => enabled !== false, // defaults to true
+    'auctionDelay', auctionDelay => auctionDelay || 0,
+    'endpoint', endpoint => endpoint || {},
+    'enforcement', enforcement => utils.pick(enforcement, [
+      'enforceJS', enforceJS => enforceJS !== false, // defaults to true
+      'enforcePBS', enforcePBS => enforcePBS !== true, // defaults to false
+      'floorDeals', floorDeals => floorDeals !== true, // defaults to false
+      'bidAdjustment', bidAdjustment => bidAdjustment !== false, // defaults to true
+    ]),
+    'data', data => parseFloorData(data, 'setConfig') || _floorsConfig.data // do not overwrite if passed in data not valid
+  ]);
 
-  // only update the floorsData if something is not fetching
-  if (!fetching && newFloorsConfig.data) {
-    updateGlobalFloorsData(newFloorsConfig.data, 'setConfig');
-  }
-  // handle the floors fetch
-  generateAndHandleFetch(newFloorsConfig);
+  // if enabled then do some stuff
+  if (_floorsConfig.enabled) {
+    // handle the floors fetch
+    generateAndHandleFetch(_floorsConfig.endpoint);
 
-  if (!addedFloorsHook) {
-    // register hooks / listening events
-    // when auction finishes remove it's associated floor data
-    events.on(CONSTANTS.EVENTS.AUCTION_END, (args) => delete _floorDataForAuction[args.auctionId]);
+    if (!addedFloorsHook) {
+      // register hooks / listening events
+      // when auction finishes remove it's associated floor data
+      events.on(CONSTANTS.EVENTS.AUCTION_END, (args) => delete _floorDataForAuction[args.auctionId]);
 
-    // we want our hooks to run after the currency hooks
-    getGlobal().requestBids.before(requestBidsHook, 1);
-    getHook('addBidResponse').before(addBidResponseHook, 1);
-    addedFloorsHook = true;
+      // we want our hooks to run after the currency hooks
+      getGlobal().requestBids.before(requestBidsHook, 1);
+      getHook('addBidResponse').before(addBidResponseHook, 1);
+      addedFloorsHook = true;
+    }
+  } else {
+    utils.logInfo(`${MODULE_NAME}: Turning off module`);
+
+    _floorsConfig = {};
+    _floorDataForAuction = {};
+
+    getHook('addBidResponse').getHooks({hook: addBidResponseHook}).remove();
+    getGlobal().requestBids.getHooks({hook: requestBidsHook}).remove();
+
+    addedFloorsHook = false;
   }
 };
 
 function addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm) {
   bid.floorData = {
     floorEnforced: floorInfo.matchingFloor,
-    adjustedCpm
+    adjustedCpm,
+    enforceJS: floorData.enforcement.enforceJS,
+    matchedFields: {}
   }
   floorData.data.schema.fields.forEach((field, index) => {
-    let matchedValue = floorInfo.matchingData.split(floorData.data.delimiter)[index];
-    bid.floorData[field] = matchedValue;
+    let matchedValue = floorInfo.matchingData.split(floorData.data.schema.delimiter)[index];
+    bid.floorData.matchedFields[field] = matchedValue;
   });
 }
 
@@ -516,11 +511,11 @@ export function addBidResponseHook(fn, adUnitCode, bid) {
   // get the matching rule
   let mediaType = bid.mediaType || 'banner';
   let size = [bid.width, bid.height];
-  const matchingBidRequest = this.bidderRequest.bids.find(bidRequest => bidRequest.bidId === bid.requestId);
+  const matchingBidRequest = find(this.bidderRequest.bids, bidRequest => bidRequest.bidId === bid.requestId);
   let floorInfo = getFirstMatchingFloor(floorData.data, matchingBidRequest, mediaType, size);
 
   if (!floorInfo.matchingFloor) {
-    utils.logWarn(`${MODULE_NAME}: unable to determine a matching price floor for bidResponse ${bid}`);
+    utils.logWarn(`${MODULE_NAME}: unable to determine a matching price floor for bidResponse`, bid);
     return fn.call(this, adUnitCode, bid);
   }
 
@@ -563,35 +558,3 @@ export function addBidResponseHook(fn, adUnitCode, bid) {
 }
 
 config.getConfig('floors', config => handleSetFloorsConfig(config.floors));
-
-/// // TEMP TESTING CODE //////
-// Function which generates a floors data rules combinations with a bunch of differing floors
-function tempTestCode () {
-  let arrayOfFields = [
-    ['/112115922/HB_QA_Tests', '/112115922/HB_QA_Tests-hello', '*'],
-    ['banner', 'video', '*'],
-    ['300x250', '728x90', '640x480', '*'],
-    ['cnn.com', 'rubitest.com', '*'],
-  ];
-
-  let combos = arrayOfFields.reduce((accum, currentVal) => {
-    let ret = [];
-    accum.map(obj => {
-      currentVal.map(obj_1 => {
-        ret.push(obj + '|' + obj_1)
-      });
-    });
-    return ret;
-  });
-
-  let values = combos.reduce((accum, hashThing) => {
-    let objectThing = {
-      key: hashThing,
-      floor: accum.length + 0.01
-    };
-    accum.push(objectThing);
-    return accum;
-  }, []);
-
-  console.log(JSON.stringify(values));
-}
