@@ -474,9 +474,6 @@ export const spec = {
       });
       data['rp_hard_floor'] = floorInfo.currency === 'USD' ? floorInfo.floor : undefined;
     }
-    if (bidRequest.floorData) {
-      Object.keys(bidRequest.floorData).forEach((key) => data[`tk_ipf_${key}`] = bidRequest.floorData[key]);
-    }
 
     // add p_pos only if specified and valid
     // For SRA we need to explicitly put empty semi colons so AE treats it as empty, instead of copying the latter value

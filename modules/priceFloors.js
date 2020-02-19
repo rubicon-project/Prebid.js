@@ -26,29 +26,29 @@ const allowedFields = ['gptSlot', 'adUnitCode', 'size', 'domain', 'mediaType'];
 /**
  * @summary This is a flag to indicate if a AJAX call is processing for a floors request
 */
-var fetching = false;
+let fetching = false;
 
 /**
  * @summary so we only register for our hooks once
 */
-var addedFloorsHook = false;
+let addedFloorsHook = false;
 
 /**
  * @summary The config to be used. Can be updated via: setConfig or a real time fetch
  */
-var _floorsConfig = {};
+let _floorsConfig = {};
 
 /**
  * @summary If a auction is to be delayed by an ongoing fetch we hold it here until it can be resumed
  */
-var _delayedAuctions = [];
+let _delayedAuctions = [];
 
 /**
  * @summary Each auction can have differing floors data depending on execution time or per adunit setup
  * So we will be saving each auction offset by it's auctionId in order to make sure data is not changed
  * Once the auction commences
  */
-export var _floorDataForAuction = {};
+export let _floorDataForAuction = {};
 
 /**
  * @summary Simple function to round up to a certain decimal degree
@@ -85,7 +85,7 @@ function enumeratePossibleFieldValues(floorFields, bidObject, mediaType, size) {
       exactMatch = fieldMatchingFunctions[field](bidObject);
     }
     // storing exact matches as lowerCase since we want to compare case insensitively
-    accum.push([exactMatch.toLowerCase(), '*']);
+    accum.push(exactMatch === '*' ? ['*'] : [exactMatch.toLowerCase(), '*']);
     return accum;
   }, []);
 };
@@ -154,9 +154,9 @@ export function getFloor(requestParams = {}) {
   // if bidder asked for a currency which is not what floors are set in convert
   if (floorInfo.matchingFloor && currency !== floorData.data.currency) {
     try {
-      floorInfo.matchingFloor = this.convertCurrency(floorInfo.matchingFloor, floorData.data.currency, currency);
+      floorInfo.matchingFloor = getGlobal().convertCurrency(floorInfo.matchingFloor, floorData.data.currency, currency);
     } catch (err) {
-      utils.logWarn(`${MODULE_NAME}: Unable to get currency conversion for getFloor for bidder ${this.bidder}. You must have currency module enabled with addBidRequestHook enabled and at least have defaultRates in your currency config`);
+      utils.logWarn(`${MODULE_NAME}: Unable to get currency conversion for getFloor for bidder ${this.bidder}. You must have currency module enabled with defaultRates in your currency config`);
       // since we were unable to convert to the bidders requested currency, we send back just the actual floors currency to them
       currency = floorData.data.currency;
     }
@@ -209,72 +209,65 @@ function convertRulesToHash(floorData, adUnitCode) {
   }, {});
 };
 
+export function getFloorDataFromAdUnits(adUnits) {
+  return adUnits.reduce((accum, adUnit) => {
+    if (isFloorsDataValid(adUnit.floors)) {
+      // if values already exist we want to not overwrite them
+      if (!accum.values) {
+        accum = getFloorsDataForAuction(adUnit.floors, adUnit.code);
+        accum.location = 'adUnit';
+      } else {
+        let newRules = getFloorsDataForAuction(adUnit.floors, adUnit.code).values;
+        // copy over the new rules into our values object
+        Object.assign(accum.values, newRules);
+      }
+    }
+    return accum;
+  }, {});
+};
 /**
  * @summary This function takes the adUnits for the auction and update them accordingly as well as returns the rules hashmap for the auction
  */
-export function updateAdUnitsForAuction(adUnits) {
-  let newRules;
-  let resolvedFloorsData = utils.deepClone(_floorsConfig);
-  resolvedFloorsData.skipped = false;
-
-  // if we do not have a floors data set, we will try to use data set on adUnits
-  let useAdUnitData = (utils.deepAccess(resolvedFloorsData, 'data.values') || []).length === 0;
-  adUnits.forEach((adUnit, index) => {
-    // add getFloor to each bid
+export function updateAdUnitsForAuction(adUnits, floorData, skipped) {
+  adUnits.forEach((adUnit) => {
     adUnit.bids.forEach(bid => {
-      // allows getFloor to have context of the bidRequestObj
-      bid.getFloor = getFloor;
+      if (skipped) {
+        delete bid.getFloor;
+      } else {
+        bid.getFloor = getFloor;
+      }
       // information for bid and analytics adapters
       bid.floorData = {
-        skipped: false,
-        modelVersion: utils.deepAccess(resolvedFloorsData, 'data.modelVersion') || '',
-        location: useAdUnitData ? 'adUnit' : resolvedFloorsData.data.location,
+        skipped,
+        modelVersion: utils.deepAccess(floorData, 'data.modelVersion') || '',
+        location: floorData.data.location,
       }
     });
-
-    // if we need to generate floors data from adUnit do it
-    if (useAdUnitData) {
-      if (isFloorsDataValid(adUnit.floors)) {
-        // if values already exist we want to not overwrite them
-        if (index === 0) {
-          resolvedFloorsData.data = getFloorsDataForAuction(adUnit.floors, adUnit.code);
-        } else {
-          newRules = getFloorsDataForAuction(adUnit.floors, adUnit.code).values;
-          Object.assign(resolvedFloorsData.data.values, newRules);
-        }
-      }
-    }
   });
-  if (!useAdUnitData) {
-    resolvedFloorsData.data = getFloorsDataForAuction(resolvedFloorsData.data);
-  }
-  return resolvedFloorsData;
 };
 
 /**
  * @summary Updates the adUnits accordingly and returns the necessary floorsData for the current auction
  */
 export function createFloorsDataForAuction(adUnits) {
-  // determine the skip rate now
-  const skipRate = utils.deepAccess(_floorsConfig, 'data.skipRate') || 0;
-  if (Math.random() * 100 < skipRate) {
-    // loop through adUnits and remove getFloor if it's there (re-used adUnits scenario) and add floor info
-    adUnits.forEach(adUnit => {
-      adUnit.bids.forEach(bid => {
-        bid.floorData = {
-          skipped: true,
-          modelVersion: utils.deepAccess(_floorsConfig, 'data.modelVersion') || '',
-          location: _floorsConfig.data.location
-        };
-        delete bid.getFloor;
-      });
-    });
-    return {
-      skipped: true
-    };
+  let resolvedFloorsData = utils.deepClone(_floorsConfig);
+
+  // if we do not have a floors data set, we will try to use data set on adUnits
+  let useAdUnitData = (utils.deepAccess(resolvedFloorsData, 'data.values') || []).length === 0;
+  if (useAdUnitData) {
+    resolvedFloorsData.data = getFloorDataFromAdUnits(adUnits);
+  } else {
+    resolvedFloorsData.data = getFloorsDataForAuction(resolvedFloorsData.data);
   }
-  // else we are flooring
-  return updateAdUnitsForAuction(adUnits);
+  // if we still do not have a valid floor data then floors is not on for this auction
+  if (Object.keys(utils.deepAccess(resolvedFloorsData, 'data.values') || {}).length === 0) {
+    return;
+  }
+  // determine the skip rate now
+  const isSkipped = Math.random() * 100 < (utils.deepAccess(resolvedFloorsData, 'data.skipRate') || 0);
+  resolvedFloorsData.skipped = isSkipped;
+  updateAdUnitsForAuction(adUnits, resolvedFloorsData, isSkipped);
+  return resolvedFloorsData;
 };
 
 /**
@@ -464,8 +457,8 @@ export function handleSetFloorsConfig(config) {
       events.on(CONSTANTS.EVENTS.AUCTION_END, (args) => delete _floorDataForAuction[args.auctionId]);
 
       // we want our hooks to run after the currency hooks
-      getGlobal().requestBids.before(requestBidsHook, 1);
-      getHook('addBidResponse').before(addBidResponseHook, 1);
+      getGlobal().requestBids.before(requestBidsHook, 50);
+      getHook('addBidResponse').before(addBidResponseHook, 50);
       addedFloorsHook = true;
     }
   } else {
