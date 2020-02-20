@@ -23,19 +23,6 @@ describe('the price floors module', function () {
       delimiter: '|',
       fields: ['mediaType']
     },
-    values: [
-      {key: 'banner', floor: 1.0},
-      {key: 'video', floor: 5.0},
-      {key: '*', floor: 2.5},
-    ]
-  };
-  const basicFloorDataAfterMap = {
-    modelVersion: 'basic model',
-    currency: 'USD',
-    schema: {
-      delimiter: '|',
-      fields: ['mediaType']
-    },
     values: {
       'banner': 1.0,
       'video': 5.0,
@@ -82,14 +69,14 @@ describe('the price floors module', function () {
 
   describe('getFloorsDataForAuction', function () {
     it('converts basic input floor data into a floorData map for the auction correctly', function () {
-      // basic input
-      expect(getFloorsDataForAuction(basicFloorData)).to.deep.equal(basicFloorDataAfterMap);
+      // basic input where nothing needs to be updated
+      expect(getFloorsDataForAuction(basicFloorData)).to.deep.equal(basicFloorData);
 
       // if cur and delim not defined then default to correct ones (usd and |)
       let inputFloorData = utils.deepClone(basicFloorData);
       delete inputFloorData.currency;
       delete inputFloorData.schema.delimiter;
-      expect(getFloorsDataForAuction(inputFloorData)).to.deep.equal(basicFloorDataAfterMap);
+      expect(getFloorsDataForAuction(inputFloorData)).to.deep.equal(basicFloorData);
 
       // should not use defaults if differing values
       inputFloorData.currency = 'EUR'
@@ -104,13 +91,13 @@ describe('the price floors module', function () {
         schema: {
           fields: ['mediaType', 'size', 'domain']
         },
-        values: [
-          {key: 'banner|300x250|prebid.org', floor: 1.0},
-          {key: 'video|640x480|prebid.org', floor: 5.0},
-          {key: 'banner|728x90|rubicon.com', floor: 3.5},
-          {key: 'video|600x300|appnexus.com', floor: 3.5},
-          {key: '*|*|prebid.org', floor: 3.5},
-        ]
+        values: {
+          'banner|300x250|prebid.org': 1.0,
+          'video|640x480|prebid.org': 5.0,
+          'banner|728x90|rubicon.com': 3.5,
+          'video|600x300|appnexus.com': 3.5,
+          '*|*|prebid.org': 3.5,
+        }
       };
       let resultingData = getFloorsDataForAuction(inputFloorData);
       expect(resultingData).to.deep.equal({
@@ -168,19 +155,19 @@ describe('the price floors module', function () {
   describe('getFirstMatchingFloor', function () {
     it('selects the right floor for different mediaTypes', function () {
       // banner with * size (not in rule file so does not do anything)
-      expect(getFirstMatchingFloor(basicFloorDataAfterMap, basicBidRequest, 'banner', '*')).to.deep.equal({
+      expect(getFirstMatchingFloor(basicFloorData, basicBidRequest, 'banner', '*')).to.deep.equal({
         matchingFloor: 1.0,
         matchingData: 'banner',
         matchingRule: 'banner'
       });
       // video with * size (not in rule file so does not do anything)
-      expect(getFirstMatchingFloor(basicFloorDataAfterMap, basicBidRequest, 'video', '*')).to.deep.equal({
+      expect(getFirstMatchingFloor(basicFloorData, basicBidRequest, 'video', '*')).to.deep.equal({
         matchingFloor: 5.0,
         matchingData: 'video',
         matchingRule: 'video'
       });
       // native (not in the rule list) with * size (not in rule file so does not do anything)
-      expect(getFirstMatchingFloor(basicFloorDataAfterMap, basicBidRequest, 'native', '*')).to.deep.equal({
+      expect(getFirstMatchingFloor(basicFloorData, basicBidRequest, 'native', '*')).to.deep.equal({
         matchingFloor: 2.5,
         matchingData: 'native',
         matchingRule: '*'

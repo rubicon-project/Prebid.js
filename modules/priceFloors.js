@@ -183,28 +183,25 @@ export function getFloor(requestParams = {}) {
 export function getFloorsDataForAuction(floorData, adUnitCode) {
   let auctionFloorData = utils.deepClone(floorData);
   auctionFloorData.schema.delimiter = floorData.schema.delimiter || '|';
-  auctionFloorData.values = convertRulesToHash(auctionFloorData, adUnitCode);
+  auctionFloorData.values = normalizeRulesForAuction(auctionFloorData, adUnitCode);
   // default the currency to USD if not passed in
   auctionFloorData.currency = auctionFloorData.currency || 'USD';
   return auctionFloorData;
 };
 
 /**
- * @summary Flattens the provided values array into an object with {KEY: FLOOR}
+ * @summary if adUnitCode needs to be added to the offset then it will add it else just return the values
  */
-function convertRulesToHash(floorData, adUnitCode) {
+function normalizeRulesForAuction(floorData, adUnitCode) {
   let fields = floorData.schema.fields;
   let delimiter = floorData.schema.delimiter
 
   // if we are building the floor data form an ad unit, we need to append adUnit code as to not cause collisions
-  let prependAdUnit = adUnitCode && !fields.includes('adUnitCode') && fields.unshift('adUnitCode');
-  return floorData.values.reduce((rulesHash, rule) => {
-    let key = rule.key;
-    if (prependAdUnit) {
-      key = `${adUnitCode}${delimiter}${key}`;
-    }
+  let prependAdUnitCode = adUnitCode && !fields.includes('adUnitCode') && fields.unshift('adUnitCode');
+  return Object.keys(floorData.values).reduce((rulesHash, oldKey) => {
+    let newKey = prependAdUnitCode ? `${adUnitCode}${delimiter}${oldKey}` : oldKey
     // we store the rule keys as lower case for case insensitive compare
-    rulesHash[key.toLowerCase()] = rule.floor;
+    rulesHash[newKey.toLowerCase()] = floorData.values[oldKey];
     return rulesHash;
   }, {});
 };
@@ -253,7 +250,7 @@ export function createFloorsDataForAuction(adUnits) {
   let resolvedFloorsData = utils.deepClone(_floorsConfig);
 
   // if we do not have a floors data set, we will try to use data set on adUnits
-  let useAdUnitData = (utils.deepAccess(resolvedFloorsData, 'data.values') || []).length === 0;
+  let useAdUnitData = Object.keys(utils.deepAccess(resolvedFloorsData, 'data.values') || {}).length === 0;
   if (useAdUnitData) {
     resolvedFloorsData.data = getFloorDataFromAdUnits(adUnits);
   } else {
@@ -298,22 +295,26 @@ function validateSchemaFields(fields) {
   return false;
 };
 
-function isValidRule(rule, numFields, delimiter) {
-  if (typeof rule !== 'object') {
-    return false
-  }
-  if (typeof rule.key !== 'string' || rule.key.split(delimiter).length !== numFields) {
+function isValidRule(key, floor, numFields, delimiter) {
+  if (typeof key !== 'string' || key.split(delimiter).length !== numFields) {
     return false;
   }
-  return typeof rule.floor === 'number';
+  return typeof floor === 'number';
 };
 
 function validateRules(rules, numFields, delimiter) {
-  if (!Array.isArray(rules)) {
+  if (typeof rules !== 'object') {
     return false;
   }
-  rules = rules.filter(rule => isValidRule(rule, numFields, delimiter));
-  return rules.length > 0;
+  // if an invalid rule exists we remove it
+  rules = Object.keys(rules).reduce((filteredRules, key) => {
+    if (isValidRule(key, rules[key], numFields, delimiter)) {
+      filteredRules[key] = rules[key];
+    }
+    return filteredRules
+  }, {});
+  // rules is only valid if at least one rule remains
+  return Object.keys(rules).length > 0;
 };
 
 /**
