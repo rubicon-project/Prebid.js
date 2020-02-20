@@ -109,6 +109,8 @@ export function getFirstMatchingFloor(floorData, bidObject, mediaType, size) {
 
 /**
  * @summary Generates all possible rule hash's based on input array of array's
+ * The generated list is of all possible key matches based on fields input
+ * The list is sorted by least amount of * in rule to most with left most fields taking precedence
  */
 function generatePossibleEnumerations(arrayOfFields, delimiter) {
   return arrayOfFields.reduce((accum, currentVal) => {
@@ -119,7 +121,7 @@ function generatePossibleEnumerations(arrayOfFields, delimiter) {
       });
     });
     return ret;
-  });
+  }).sort((left, right) => (left.split('*').length - 1) - (right.split('*').length - 1));
 };
 
 /**

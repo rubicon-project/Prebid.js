@@ -188,7 +188,7 @@ export const spec = {
         let floorInfo = bidRequest.getFloor({
           currency: 'USD',
           mediaType: 'video',
-          size: '*'
+          size: parseSizes(bidRequest, 'video')
         });
         bidFloor = floorInfo.currency === 'USD' ? floorInfo.floor : undefined;
       } else {
