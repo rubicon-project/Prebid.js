@@ -304,19 +304,19 @@ function isValidRule(key, floor, numFields, delimiter) {
   return typeof floor === 'number';
 };
 
-function validateRules(rules, numFields, delimiter) {
-  if (typeof rules !== 'object') {
+function validateRules(floorsData, numFields, delimiter) {
+  if (typeof floorsData.values !== 'object') {
     return false;
   }
   // if an invalid rule exists we remove it
-  rules = Object.keys(rules).reduce((filteredRules, key) => {
-    if (isValidRule(key, rules[key], numFields, delimiter)) {
-      filteredRules[key] = rules[key];
+  floorsData.values = Object.keys(floorsData.values).reduce((filteredRules, key) => {
+    if (isValidRule(key, floorsData.values[key], numFields, delimiter)) {
+      filteredRules[key] = floorsData.values[key];
     }
     return filteredRules
   }, {});
   // rules is only valid if at least one rule remains
-  return Object.keys(rules).length > 0;
+  return Object.keys(floorsData.values).length > 0;
 };
 
 /**
@@ -333,7 +333,7 @@ export function isFloorsDataValid(floorsData) {
   if (!validateSchemaFields(utils.deepAccess(floorsData, 'schema.fields'))) {
     return false;
   }
-  return validateRules(floorsData.values, floorsData.schema.fields.length, floorsData.schema.delimiter || '|')
+  return validateRules(floorsData, floorsData.schema.fields.length, floorsData.schema.delimiter || '|')
 };
 
 /**
@@ -499,15 +499,15 @@ function shouldFloorBid(floorData, floorInfo, bid) {
 
 export function addBidResponseHook(fn, adUnitCode, bid) {
   let floorData = _floorDataForAuction[this.bidderRequest.auctionId];
-  // if no floorData or it was skipped then just continue
-  if (!floorData || !bid || floorData.skipped) {
+  // if no floor data or associated bidRequest then bail
+  const matchingBidRequest = find(this.bidderRequest.bids, bidRequest => bidRequest.bidId && bidRequest.bidId === bid.requestId);
+  if (!floorData || !bid || floorData.skipped || !matchingBidRequest) {
     return fn.call(this, adUnitCode, bid);
   }
 
   // get the matching rule
   let mediaType = bid.mediaType || 'banner';
   let size = [bid.width, bid.height];
-  const matchingBidRequest = find(this.bidderRequest.bids, bidRequest => bidRequest.bidId === bid.requestId);
   let floorInfo = getFirstMatchingFloor(floorData.data, matchingBidRequest, mediaType, size);
 
   if (!floorInfo.matchingFloor) {
@@ -520,12 +520,14 @@ export function addBidResponseHook(fn, adUnitCode, bid) {
 
   // floors currency not guaranteed to be adServer Currency
   // if the floor currency is not the same as the cpm currency then we need to convert
-  if (floorData.data.currency.toUpperCase() !== bid.currency.toUpperCase()) {
-    if (typeof bid.getCpmInNewCurrency !== 'function') {
+  let bidResponseCurrency = bid.currency || 'USD'
+  if (floorData.data.currency.toUpperCase() !== bidResponseCurrency.toUpperCase()) {
+    try {
+      adjustedCpm = getGlobal().convertCurrency(floorInfo.matchingFloor, bidResponseCurrency.toUpperCase(), floorData.data.currency.toUpperCase());
+    } catch (err) {
       utils.logError(`${MODULE_NAME}: Currency module is required if any bidResponse currency differs from floors currency`);
       return fn.call(this, adUnitCode, bid);
     }
-    adjustedCpm = parseFloat(bid.getCpmInNewCurrency(floorData.data.currency.toUpperCase()));
   }
   // add floor data to bid for analytics adapters to use
   addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm);
@@ -545,7 +547,7 @@ export function addBidResponseHook(fn, adUnitCode, bid) {
       'originalCurrency',
       'getCpmInNewCurrency',
     ]));
-    flooredBid.status = 'bidRejected';
+    flooredBid.status = CONSTANTS.BID_REJECTED;
     // if floor not met update bid with 0 cpm so it is not included downstream and marked as no-bid
     flooredBid.cpm = 0;
     return fn.call(this, adUnitCode, flooredBid);
