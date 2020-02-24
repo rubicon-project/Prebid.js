@@ -7,6 +7,8 @@ import CONSTANTS from '../src/constants.json';
 import { getHook } from '../src/hook.js';
 import { createBid } from '../src/bidfactory';
 import find from 'core-js/library/fn/array/find';
+import * as urlLib from '../src/url.js'
+import { getRefererInfo } from '../src/refererDetection.js'
 
 /**
  * @summary This Module is intended to provide users with the ability to dynamically set and enforce price floors on a per auction basis.
@@ -57,12 +59,19 @@ function roundUp(number, precision) {
   return Math.ceil(parseFloat(number) * Math.pow(10, precision)) / Math.pow(10, precision);
 }
 
+let referrerHostname;
+
+function getHostNameFromReferer(referer) {
+  referrerHostname = urlLib.parse(referer).hostname;
+  return referrerHostname;
+};
+
 /**
  * @summary floor field types with their matching functions to resolve the actual matched value
  */
 const fieldMatchingFunctions = {
   'gptSlot': bidObject => utils.getGptSlotInfoForAdUnitCode(bidObject.adUnitCode).gptSlot,
-  'domain': () => window.location.hostname,
+  'domain': () => referrerHostname || getHostNameFromReferer(getRefererInfo().referer),
   'adUnitCode': bidObject => bidObject.adUnitCode
 };
 
@@ -446,7 +455,7 @@ export function handleSetFloorsConfig(config) {
       'floorDeals', floorDeals => floorDeals !== true, // defaults to false
       'bidAdjustment', bidAdjustment => bidAdjustment !== false, // defaults to true
     ]),
-    'data', data => parseFloorData(data, 'setConfig') || _floorsConfig.data // do not overwrite if passed in data not valid
+    'data', data => data ? parseFloorData(data, 'setConfig') : _floorsConfig.data // do not overwrite if passed in data not valid
   ]);
 
   // if enabled then do some stuff
