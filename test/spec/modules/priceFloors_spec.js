@@ -36,7 +36,7 @@ describe('the price floors module', function () {
     endpoint: {},
     enforcement: {
       enforceJS: true,
-      enfocePBS: false,
+      enforcePBS: false,
       floorDeals: false,
       bidAdjustment: true
     },
@@ -690,7 +690,7 @@ describe('the price floors module', function () {
       _floorDataForAuction[bidderRequest.auctionId].data.values = { 'banner': 1.0 };
       runBidResponse();
       expect(returnedBidResponse).to.haveOwnProperty('floorData');
-      expect(returnedBidResponse.status).to.equal(CONSTANTS.BID_REJECTED);
+      expect(returnedBidResponse.status).to.equal(CONSTANTS.BID_STATUS.BID_REJECTED);
       expect(returnedBidResponse.cpm).to.equal(0);
     });
     it('if it finds a rule and does not floor should update the bid accordingly', function () {
@@ -699,9 +699,16 @@ describe('the price floors module', function () {
       runBidResponse();
       expect(returnedBidResponse).to.haveOwnProperty('floorData');
       expect(returnedBidResponse.floorData).to.deep.equal({
-        floorEnforced: 0.3,
-        adjustedCpm: 0.5,
-        enforceJS: true,
+        floorValue: 0.3,
+        floorCurrency: 'USD',
+        floorRule: 'banner',
+        cpmAfterAdjustments: 0.5,
+        enforecements: {
+          bidAdjustment: true,
+          enforceJS: true,
+          enforcePBS: false,
+          floorDeals: false
+        },
         matchedFields: {
           mediaType: 'banner'
         }
@@ -728,9 +735,16 @@ describe('the price floors module', function () {
       runBidResponse();
       expect(returnedBidResponse).to.haveOwnProperty('floorData');
       expect(returnedBidResponse.floorData).to.deep.equal({
-        floorEnforced: 0.5,
-        adjustedCpm: 0.5,
-        enforceJS: true,
+        floorValue: 0.5,
+        floorCurrency: 'USD',
+        floorRule: 'banner|300x250',
+        cpmAfterAdjustments: 0.5,
+        enforecements: {
+          bidAdjustment: true,
+          enforceJS: true,
+          enforcePBS: false,
+          floorDeals: false
+        },
         matchedFields: {
           mediaType: 'banner',
           size: '300x250'
@@ -748,12 +762,19 @@ describe('the price floors module', function () {
       });
       expect(returnedBidResponse).to.haveOwnProperty('floorData');
       expect(returnedBidResponse.floorData).to.deep.equal({
-        floorEnforced: 5.5,
-        adjustedCpm: 7.5,
-        enforceJS: true,
+        floorValue: 5.5,
+        floorCurrency: 'USD',
+        floorRule: 'video|*',
+        cpmAfterAdjustments: 7.5,
+        enforecements: {
+          bidAdjustment: true,
+          enforceJS: true,
+          enforcePBS: false,
+          floorDeals: false
+        },
         matchedFields: {
           mediaType: 'video',
-          size: '300x250' // passes the real actual value not matched rule
+          size: '300x250'
         }
       });
       expect(returnedBidResponse.cpm).to.equal(7.5);
