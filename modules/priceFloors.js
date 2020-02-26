@@ -7,8 +7,8 @@ import CONSTANTS from '../src/constants.json';
 import { getHook } from '../src/hook.js';
 import { createBid } from '../src/bidfactory';
 import find from 'core-js/library/fn/array/find';
-import * as urlLib from '../src/url.js'
-import { getRefererInfo } from '../src/refererDetection.js'
+import { parse as urlParse } from '../src/url.js';
+import { getRefererInfo } from '../src/refererDetection.js';
 
 /**
  * @summary This Module is intended to provide users with the ability to dynamically set and enforce price floors on a per auction basis.
@@ -62,7 +62,7 @@ function roundUp(number, precision) {
 let referrerHostname;
 
 function getHostNameFromReferer(referer) {
-  referrerHostname = urlLib.parse(referer).hostname;
+  referrerHostname = urlParse(referer).hostname;
   return referrerHostname;
 };
 
@@ -451,8 +451,8 @@ export function handleSetFloorsConfig(config) {
     'endpoint', endpoint => endpoint || {},
     'enforcement', enforcement => utils.pick(enforcement, [
       'enforceJS', enforceJS => enforceJS !== false, // defaults to true
-      'enforcePBS', enforcePBS => enforcePBS !== true, // defaults to false
-      'floorDeals', floorDeals => floorDeals !== true, // defaults to false
+      'enforcePBS', enforcePBS => enforcePBS === true, // defaults to false
+      'floorDeals', floorDeals => floorDeals === true, // defaults to false
       'bidAdjustment', bidAdjustment => bidAdjustment !== false, // defaults to true
     ]),
     'data', data => data ? parseFloorData(data, 'setConfig') : _floorsConfig.data // do not overwrite if passed in data not valid
@@ -488,9 +488,11 @@ export function handleSetFloorsConfig(config) {
 
 function addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm) {
   bid.floorData = {
-    floorEnforced: floorInfo.matchingFloor,
-    adjustedCpm,
-    enforceJS: floorData.enforcement.enforceJS,
+    floorValue: floorInfo.matchingFloor,
+    floorRule: floorInfo.matchingRule,
+    floorCurrency: floorData.data.currency,
+    cpmAfterAdjustments: adjustedCpm,
+    enforecements: floorData.enforcement,
     matchedFields: {}
   }
   floorData.data.schema.fields.forEach((field, index) => {
@@ -502,7 +504,7 @@ function addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm) {
 function shouldFloorBid(floorData, floorInfo, bid) {
   let enforceJS = utils.deepAccess(floorData, 'enforcement.enforceJS') !== false;
   let shouldFloorDeal = utils.deepAccess(floorData, 'enforcement.floorDeals') === true || !bid.dealId;
-  let bidBelowFloor = bid.floorData.adjustedCpm < floorInfo.matchingFloor;
+  let bidBelowFloor = bid.floorData.cpmAfterAdjustments < floorInfo.matchingFloor;
   return enforceJS && (bidBelowFloor && shouldFloorDeal);
 }
 
@@ -524,21 +526,27 @@ export function addBidResponseHook(fn, adUnitCode, bid) {
     return fn.call(this, adUnitCode, bid);
   }
 
-  // we need to get the bidders cpm after the adjustment
-  let adjustedCpm = getBiddersCpmAdjustment(bid.bidderCode, bid.cpm);
-
-  // floors currency not guaranteed to be adServer Currency
-  // if the floor currency is not the same as the cpm currency then we need to convert
-  let bidResponseCurrency = bid.currency || 'USD'
-  if (floorData.data.currency.toUpperCase() !== bidResponseCurrency.toUpperCase()) {
+  // determine the base cpm to use based on if the currency matches the floor currency
+  let adjustedCpm;
+  let floorCurrency = floorData.data.currency.toUpperCase();
+  let bidResponseCurrency = bid.currency || 'USD'; // if an adapter does not set a bid currency and currency module not on it may come in as undefined
+  if (floorCurrency === bidResponseCurrency.toUpperCase()) {
+    adjustedCpm = bid.cpm;
+  } else if (bid.originalCurrency && floorCurrency === bid.originalCurrency.toUpperCase()) {
+    adjustedCpm = bid.originalCpm;
+  } else {
     try {
-      adjustedCpm = getGlobal().convertCurrency(floorInfo.matchingFloor, bidResponseCurrency.toUpperCase(), floorData.data.currency.toUpperCase());
+      adjustedCpm = getGlobal().convertCurrency(bid.cpm, bidResponseCurrency.toUpperCase(), floorCurrency);
     } catch (err) {
-      utils.logError(`${MODULE_NAME}: Currency module is required if any bidResponse currency differs from floors currency`);
+      utils.logError(`${MODULE_NAME}: Unable do get currency conversion for bidResponse to Floor Currency. Do you have Currency module enabled? ${bid}`);
       return fn.call(this, adUnitCode, bid);
     }
   }
-  // add floor data to bid for analytics adapters to use
+
+  // ok we got the bid response cpm in our desired currency. Now we need to run the bidders CPMAdjustment function if it exists
+  adjustedCpm = getBiddersCpmAdjustment(bid.bidderCode, adjustedCpm);
+
+  // add necessary data information for analytics adapters / floor providers would possibly need
   addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm);
 
   // now do the compare!
@@ -556,9 +564,10 @@ export function addBidResponseHook(fn, adUnitCode, bid) {
       'originalCurrency',
       'getCpmInNewCurrency',
     ]));
-    flooredBid.status = CONSTANTS.BID_REJECTED;
+    flooredBid.status = CONSTANTS.BID_STATUS.BID_REJECTED;
     // if floor not met update bid with 0 cpm so it is not included downstream and marked as no-bid
     flooredBid.cpm = 0;
+    utils.logWarn(`${MODULE_NAME}: ${flooredBid.bidderCode}'s Bid Response for ${adUnitCode} was rejected due to floor not met`, bid);
     return fn.call(this, adUnitCode, flooredBid);
   }
   return fn.call(this, adUnitCode, bid);

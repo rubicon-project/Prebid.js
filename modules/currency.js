@@ -96,7 +96,6 @@ export function setConfig(config) {
       url = `${url.substring(0, macroLocation)}${todaysDate}${url.substring(macroLocation + 9, url.length)}`;
     }
 
-    // new option to add a bidRequest hook to add currency conversion ability on the bidRequest Objects
     initCurrency(url);
   } else {
     // currency support is disabled, setting defaults
