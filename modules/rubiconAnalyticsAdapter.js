@@ -180,13 +180,14 @@ function sendMessage(auctionId, bidWonId) {
       adUnits: Object.keys(adUnitMap).map(i => adUnitMap[i])
     };
 
-    // if there is some general top level floor data we add each to the auction level
+    // pick our of top level floor data we want to send!
     if (auctionCache.floorData) {
-      auction.floors = {};
-      Object.assign(auction.floors, Object.keys(auctionCache.floorData).reduce((accum, val) => {
-        accum[val] = auctionCache.floorData[val];
-        return accum
-      }, {}));
+      auction.floors = utils.pick(auctionCache.floorData, [
+        'location',
+        'modelName', () => auctionCache.floorData.modelVersion || '',
+        'skipped',
+        'enforcement', () => utils.deepAccess(auctionCache.floorData, 'enforcements.enforceJS')
+      ]);
     }
 
     if (serverConfig) {
@@ -433,9 +434,9 @@ let rubiconAdapter = Object.assign({}, baseAdapter, {
         if (!utils.deepAccess(bid, 'adUnit.adSlot') && utils.deepAccess(args, 'floorData.matchedFields.gptSlot')) {
           bid.adUnit.adSlot = args.floorData.matchedFields.gptSlot;
         }
-        // if we have not set enforceJS yet set it
-        if (typeof utils.deepAccess(auctionEntry, 'floorData.enforcements.enforceJS') !== 'boolean' && args.floorData && args.floorData.hasOwnProperty('enforceJS')) {
-          auctionEntry.floorData.enforceJS = args.floorData.enforcements.enforceJS;
+        // if we have not set enforcements yet set it
+        if (!utils.deepAccess(auctionEntry, 'floorData.enforcements') && utils.deepAccess(args, 'floorData.enforcements')) {
+          auctionEntry.floorData.enforcements = args.floorData.enforcements;
         }
         if (!bid) {
           utils.logError('Rubicon Anlytics Adapter Error: Could not find associated bid request for bid response with requestId: ', args.requestId);

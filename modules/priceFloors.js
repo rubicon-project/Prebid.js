@@ -492,7 +492,7 @@ function addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm) {
     floorRule: floorInfo.matchingRule,
     floorCurrency: floorData.data.currency,
     cpmAfterAdjustments: adjustedCpm,
-    enforecements: floorData.enforcement,
+    enforcements: floorData.enforcement,
     matchedFields: {}
   }
   floorData.data.schema.fields.forEach((field, index) => {
