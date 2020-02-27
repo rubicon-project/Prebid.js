@@ -703,7 +703,7 @@ describe('the price floors module', function () {
         floorCurrency: 'USD',
         floorRule: 'banner',
         cpmAfterAdjustments: 0.5,
-        enforecements: {
+        enforcements: {
           bidAdjustment: true,
           enforceJS: true,
           enforcePBS: false,
@@ -739,7 +739,7 @@ describe('the price floors module', function () {
         floorCurrency: 'USD',
         floorRule: 'banner|300x250',
         cpmAfterAdjustments: 0.5,
-        enforecements: {
+        enforcements: {
           bidAdjustment: true,
           enforceJS: true,
           enforcePBS: false,
@@ -766,7 +766,7 @@ describe('the price floors module', function () {
         floorCurrency: 'USD',
         floorRule: 'video|*',
         cpmAfterAdjustments: 7.5,
-        enforecements: {
+        enforcements: {
           bidAdjustment: true,
           enforceJS: true,
           enforcePBS: false,
