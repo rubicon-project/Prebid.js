@@ -449,7 +449,7 @@ let rubiconAdapter = Object.assign({}, baseAdapter, {
             delete bid.error; // it's possible for this to be set by a previous timeout
             break;
           case NO_BID:
-            bid.status = args.status === BID_REJECTED ? BID_REJECTED : 'no-bid';
+            bid.status = args.status === BID_REJECTED ? 'rejected' : 'no-bid';
             delete bid.error;
             break;
           default:
