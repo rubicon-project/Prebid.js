@@ -156,19 +156,19 @@ describe('the price floors module', function () {
   describe('getFirstMatchingFloor', function () {
     it('selects the right floor for different mediaTypes', function () {
       // banner with * size (not in rule file so does not do anything)
-      expect(getFirstMatchingFloor(basicFloorData, basicBidRequest, 'banner', '*')).to.deep.equal({
+      expect(getFirstMatchingFloor({...basicFloorData}, basicBidRequest, 'banner', '*')).to.deep.equal({
         matchingFloor: 1.0,
         matchingData: 'banner',
         matchingRule: 'banner'
       });
       // video with * size (not in rule file so does not do anything)
-      expect(getFirstMatchingFloor(basicFloorData, basicBidRequest, 'video', '*')).to.deep.equal({
+      expect(getFirstMatchingFloor({...basicFloorData}, basicBidRequest, 'video', '*')).to.deep.equal({
         matchingFloor: 5.0,
         matchingData: 'video',
         matchingRule: 'video'
       });
       // native (not in the rule list) with * size (not in rule file so does not do anything)
-      expect(getFirstMatchingFloor(basicFloorData, basicBidRequest, 'native', '*')).to.deep.equal({
+      expect(getFirstMatchingFloor({...basicFloorData}, basicBidRequest, 'native', '*')).to.deep.equal({
         matchingFloor: 2.5,
         matchingData: 'native',
         matchingRule: '*'
@@ -242,10 +242,10 @@ describe('the price floors module', function () {
         matchingData: 'test_div_1^video^300x250',
         matchingRule: undefined
       });
-      // remove default and should return undefined floor
+      // remove default and should still return the same floor as above since matches are cached
       delete inputFloorData.default;
       expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, 'video', [300, 250])).to.deep.equal({
-        matchingFloor: undefined,
+        matchingFloor: 0.5,
         matchingData: 'test_div_1^video^300x250',
         matchingRule: undefined
       });
@@ -331,7 +331,7 @@ describe('the price floors module', function () {
       });
     });
     it('bidRequests should have getFloor function and flooring meta data when setConfig occurs', function () {
-      handleSetFloorsConfig(basicFloorConfig);
+      handleSetFloorsConfig({...basicFloorConfig});
       runStandardAuction();
       validateBidRequests(true, {
         skipped: false,

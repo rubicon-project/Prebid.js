@@ -81,9 +81,7 @@ const fieldMatchingFunctions = {
  * Returns array of Tuple [exact match, catch all] for each field in rules file
  */
 function enumeratePossibleFieldValues(floorFields, bidObject, mediaType, size) {
-  // enumerate possible matches
-  size = utils.parseGPTSingleSizeArray(size) || '*';
-
+  // generate combination of all exact matches and catch all for each field type
   return floorFields.reduce((accum, field) => {
     let exactMatch;
     if (field === 'size') {
@@ -104,16 +102,29 @@ function enumeratePossibleFieldValues(floorFields, bidObject, mediaType, size) {
  * Generates all possible rule matches and picks the first matching one.
  */
 export function getFirstMatchingFloor(floorData, bidObject, mediaType, size) {
+  mediaType = mediaType || 'banner';
+  size = utils.parseGPTSingleSizeArray(size) || '*';
+  let matchingInput = `${bidObject.adUnitCode}-${mediaType}-${size}`;
+
+  // if we already have gotten the matching rule from this matching input then use it! No need to look again
+  if (utils.deepAccess(floorData, `matchingInputs.${matchingInput}`)) {
+    return floorData.matchingInputs[matchingInput];
+  }
+
+  // Otherwise we will generate the permutations based on input and find first matching key
   let fieldValues = enumeratePossibleFieldValues(utils.deepAccess(floorData, 'schema.fields') || [], bidObject, mediaType, size);
   if (!fieldValues.length) return { matchingFloor: floorData.default };
   let allPossibleMatches = generatePossibleEnumerations(fieldValues, utils.deepAccess(floorData, 'schema.delimiter') || '|');
   let matchingRule = find(allPossibleMatches, hashValue => floorData.values.hasOwnProperty(hashValue));
 
-  return {
+  let matchingData = {
     matchingFloor: floorData.values[matchingRule] || floorData.default,
     matchingData: allPossibleMatches[0], // the first possible match is an "exact" so contains all data relevant for anlaytics adapters
     matchingRule
-  }
+  };
+  // save for later lookup if needed
+  utils.deepSetValue(floorData, `matchingInputs.${matchingInput}`, {...matchingData});
+  return matchingData
 };
 
 /**
@@ -159,7 +170,7 @@ export function getFloor(requestParams = {}) {
   let floorData = _floorDataForAuction[this.auctionId];
   if (!floorData || floorData.skipped) return {};
 
-  let floorInfo = getFirstMatchingFloor(floorData.data, this, requestParams.mediaType || 'banner', requestParams.size || '*');
+  let floorInfo = getFirstMatchingFloor(floorData.data, this, requestParams.mediaType, requestParams.size);
   let currency = requestParams.currency || floorData.currency;
 
   // if bidder asked for a currency which is not what floors are set in convert
@@ -517,9 +528,7 @@ export function addBidResponseHook(fn, adUnitCode, bid) {
   }
 
   // get the matching rule
-  let mediaType = bid.mediaType || 'banner';
-  let size = [bid.width, bid.height];
-  let floorInfo = getFirstMatchingFloor(floorData.data, matchingBidRequest, mediaType, size);
+  let floorInfo = getFirstMatchingFloor(floorData.data, matchingBidRequest, bid.mediaType, [bid.width, bid.height]);
 
   if (!floorInfo.matchingFloor) {
     utils.logWarn(`${MODULE_NAME}: unable to determine a matching price floor for bidResponse`, bid);

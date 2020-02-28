@@ -436,7 +436,7 @@ let rubiconAdapter = Object.assign({}, baseAdapter, {
         }
         // if we have not set enforcements yet set it
         if (!utils.deepAccess(auctionEntry, 'floorData.enforcements') && utils.deepAccess(args, 'floorData.enforcements')) {
-          auctionEntry.floorData.enforcements = args.floorData.enforcements;
+          auctionEntry.floorData.enforcements = {...args.floorData.enforcements};
         }
         if (!bid) {
           utils.logError('Rubicon Anlytics Adapter Error: Could not find associated bid request for bid response with requestId: ', args.requestId);
