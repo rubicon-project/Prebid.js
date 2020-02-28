@@ -1,12 +1,12 @@
-import { getGlobal } from '../src/prebidGlobal';
+import { getGlobal } from '../src/prebidGlobal.js';
 import { config } from '../src/config.js';
-import * as utils from '../src/utils';
-import { ajaxBuilder } from '../src/ajax';
-import events from '../src/events';
+import * as utils from '../src/utils.js';
+import { ajaxBuilder } from '../src/ajax.js';
+import events from '../src/events.js';
 import CONSTANTS from '../src/constants.json';
 import { getHook } from '../src/hook.js';
-import { createBid } from '../src/bidfactory';
-import find from 'core-js/library/fn/array/find';
+import { createBid } from '../src/bidfactory.js';
+import find from 'core-js/library/fn/array/find.js';
 import { parse as urlParse } from '../src/url.js';
 import { getRefererInfo } from '../src/refererDetection.js';
 
@@ -171,7 +171,7 @@ export function getFloor(requestParams = {}) {
   if (!floorData || floorData.skipped) return {};
 
   let floorInfo = getFirstMatchingFloor(floorData.data, this, requestParams.mediaType, requestParams.size);
-  let currency = requestParams.currency || floorData.currency;
+  let currency = requestParams.currency || floorData.data.currency;
 
   // if bidder asked for a currency which is not what floors are set in convert
   if (floorInfo.matchingFloor && currency !== floorData.data.currency) {

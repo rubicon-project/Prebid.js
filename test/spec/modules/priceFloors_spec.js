@@ -1,6 +1,6 @@
 import {expect} from 'chai';
-import * as utils from 'src/utils';
-import { getGlobal } from 'src/prebidGlobal';
+import * as utils from 'src/utils.js';
+import { getGlobal } from 'src/prebidGlobal.js';
 import CONSTANTS from 'src/constants.json';
 import {
   _floorDataForAuction,
@@ -11,7 +11,7 @@ import {
   requestBidsHook,
   isFloorsDataValid,
   addBidResponseHook
-} from 'modules/priceFloors';
+} from 'modules/priceFloors.js';
 
 describe('the price floors module', function () {
   let logErrorSpy;
@@ -284,7 +284,13 @@ describe('the price floors module', function () {
       });
     };
     let fakeFloorProvider;
-    const clock = sinon.useFakeTimers();
+    let clock;
+    before(function () {
+      clock = sinon.useFakeTimers();
+    });
+    after(function () {
+      clock.restore();
+    });
     beforeEach(function() {
       fakeFloorProvider = sinon.fakeServer.create();
     });

@@ -5,6 +5,7 @@ import { ajax } from '../src/ajax.js';
 import { config } from '../src/config.js';
 import * as utils from '../src/utils.js';
 import * as urlLib from '../src/url.js'
+import { getGlobal } from '../src/prebidGlobal.js';
 
 const {
   EVENTS: {
