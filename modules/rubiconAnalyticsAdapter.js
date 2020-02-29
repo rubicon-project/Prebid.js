@@ -359,7 +359,9 @@ let rubiconAdapter = Object.assign({}, baseAdapter, {
         cacheEntry.bids = {};
         cacheEntry.bidsWon = {};
         cacheEntry.referrer = args.bidderRequests[0].refererInfo.referer;
-        cacheEntry.floorData = utils.deepAccess(args, 'bidderRequests.0.bids.0.floorData');
+        if (utils.deepAccess(args, 'bidderRequests.0.bids.0.floorData')) {
+          cacheEntry.floorData = {...utils.deepAccess(args, 'bidderRequests.0.bids.0.floorData')};
+        }
         cache.auctions[args.auctionId] = cacheEntry;
         break;
       case BID_REQUESTED:

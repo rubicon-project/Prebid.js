@@ -162,14 +162,30 @@ export function calculateAdjustedFloor(oldFloor, newFloor) {
   return oldFloor / newFloor * oldFloor;
 };
 
+const getMediaTypesSizes = {
+  banner: (bid) => utils.deepAccess(bid, 'mediaTypes.banner.sizes') || [],
+  video: (bid) => utils.deepAccess(bid, 'mediaTypes.video.playerSize') || [],
+  native: (bid) => [utils.deepAccess(bid, 'mediaTypes.native.image.sizes')] || [],
+}
+
 /**
  * @summary This is the function which will return a single floor based on the input requests
  * and matching it to a rule for the current auction
  */
-export function getFloor(requestParams = {}) {
+export function getFloor(requestParams = {currency: 'USD', mediaType: '*', size: '*'}) {
   let floorData = _floorDataForAuction[this.auctionId];
   if (!floorData || floorData.skipped) return {};
 
+  // if adapter asks for *'s then we can do some logic to infer if we can get a more specific rule based on context of bid
+  let mediaTypesOnBid = Object.keys(this.mediaTypes || {});
+  // if there is only one mediaType then we can just use it
+  if (requestParams.mediaType === '*' && mediaTypesOnBid.length === 1) {
+    requestParams.mediaType = mediaTypesOnBid[0];
+  }
+  // if they asked for * size, but for the given mediaType there is only one size, we can just use it
+  if (requestParams.size === '*' && mediaTypesOnBid.indexOf(requestParams.mediaType) !== -1 && getMediaTypesSizes[requestParams.mediaType] && getMediaTypesSizes[requestParams.mediaType](this).length === 1) {
+    requestParams.size = getMediaTypesSizes[requestParams.mediaType](this)[0];
+  }
   let floorInfo = getFirstMatchingFloor(floorData.data, this, requestParams.mediaType, requestParams.size);
   let currency = requestParams.currency || floorData.data.currency;
 
@@ -503,9 +519,9 @@ function addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm) {
     floorRule: floorInfo.matchingRule,
     floorCurrency: floorData.data.currency,
     cpmAfterAdjustments: adjustedCpm,
-    enforcements: floorData.enforcement,
+    enforcements: {...floorData.enforcement},
     matchedFields: {}
-  }
+  };
   floorData.data.schema.fields.forEach((field, index) => {
     let matchedValue = floorInfo.matchingData.split(floorData.data.schema.delimiter)[index];
     bid.floorData.matchedFields[field] = matchedValue;

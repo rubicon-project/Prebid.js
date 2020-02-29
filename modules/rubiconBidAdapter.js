@@ -497,8 +497,8 @@ export const spec = {
       'rf': _getPageUrl(bidRequest, bidderRequest)
     };
 
-    // If Floors module is enabled and we get USD floor back, send it in rp_hard_floor else undfined
-    if (bidRequest.getFloor && !config.getConfig('rubicon.disableFloors')) {
+    // If floors module is enabled and we get USD floor back, send it in rp_hard_floor else undfined
+    if (typeof bidRequest.getFloor === 'function' && !config.getConfig('rubicon.disableFloors')) {
       let floorInfo = bidRequest.getFloor({
         currency: 'USD',
         mediaType: 'banner',
