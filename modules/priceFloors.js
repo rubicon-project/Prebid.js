@@ -16,7 +16,7 @@ import { getRefererInfo } from '../src/refererDetection.js';
 const MODULE_NAME = 'Price Floors';
 
 /**
- * @summary Instantiate Ajax so we control the timeout TODO: Change to 5000 before PR
+ * @summary Instantiate Ajax so we control the timeout
  */
 const ajax = ajaxBuilder(10000);
 
@@ -60,7 +60,6 @@ function roundUp(number, precision) {
 }
 
 let referrerHostname;
-
 function getHostNameFromReferer(referer) {
   referrerHostname = urlParse(referer).hostname;
   return referrerHostname;
@@ -99,6 +98,8 @@ function enumeratePossibleFieldValues(floorFields, bidObject, responseObject) {
 export function getFirstMatchingFloor(floorData, bidObject, responseObject = {}) {
   let fieldValues = enumeratePossibleFieldValues(utils.deepAccess(floorData, 'schema.fields') || [], bidObject, responseObject);
   if (!fieldValues.length) return { matchingFloor: floorData.default };
+
+  // look to see iof a request for this context was made already
   let matchingInput = fieldValues.map(field => field[0]).join('-');
   // if we already have gotten the matching rule from this matching input then use it! No need to look again
   if (utils.deepAccess(floorData, `matchingInputs.${matchingInput}`)) {
@@ -152,12 +153,19 @@ export function calculateAdjustedFloor(oldFloor, newFloor) {
   return oldFloor / newFloor * oldFloor;
 };
 
+/**
+ * @summary gets the prebid set sizes depending on the input mediaType
+ */
 const getMediaTypesSizes = {
   banner: (bid) => utils.deepAccess(bid, 'mediaTypes.banner.sizes') || [],
   video: (bid) => utils.deepAccess(bid, 'mediaTypes.video.playerSize') || [],
   native: (bid) => [utils.deepAccess(bid, 'mediaTypes.native.image.sizes')] || [],
 }
 
+/**
+ * @summary for getFloor only, before selecting a rule, if a bidAdapter asks for * in their getFloor params
+ * Then we may be able to get a better rule than the * ones depending on context of the adUnit
+ */
 function updateRequestParamsFromContext(bidRequest, requestParams) {
   // if adapter asks for *'s then we can do some logic to infer if we can get a more specific rule based on context of bid
   let mediaTypesOnBid = Object.keys(bidRequest.mediaTypes || {});
@@ -240,6 +248,10 @@ function normalizeRulesForAuction(floorData, adUnitCode) {
   }, {});
 };
 
+/**
+ * @summary This function will take the adUnits and generate a floor data object to be used during the auction
+ * Only called if no set config or fetch level data has returned
+ */
 export function getFloorDataFromAdUnits(adUnits) {
   return adUnits.reduce((accum, adUnit) => {
     if (isFloorsDataValid(adUnit.floors)) {
@@ -256,6 +268,7 @@ export function getFloorDataFromAdUnits(adUnits) {
     return accum;
   }, {});
 };
+
 /**
  * @summary This function takes the adUnits for the auction and update them accordingly as well as returns the rules hashmap for the auction
  */
@@ -369,7 +382,7 @@ export function isFloorsDataValid(floorsData) {
 };
 
 /**
- * This function updates the global Floors Data field based on the new one passed in
+ * @summary This function updates the global Floors Data field based on the new one passed in if it is valid
  */
 export function parseFloorData(floorsData, location) {
   if (floorsData && typeof floorsData === 'object' && isFloorsDataValid(floorsData)) {
@@ -408,6 +421,10 @@ export function requestBidsHook(fn, reqBidsConfigObj) {
   }
 };
 
+/**
+ * @summary If an auction was queued to be delayed (waiting for a fetch) then this function will resume
+ * those delayed auctions when delay is hit or success return or fail return
+ */
 function resumeDelayedAuctions() {
   _delayedAuctions.forEach(auctionConfig => {
     // clear the timeout
@@ -525,6 +542,10 @@ export function handleSetFloorsConfig(config) {
   }
 };
 
+/**
+ * @summary Analytics adapters especially need context of what the floors module is doing in order
+ * to best create informed models. This function attaches necessary information to the bidResponse object for processing
+ */
 function addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm) {
   bid.floorData = {
     floorValue: floorInfo.matchingFloor,
@@ -540,6 +561,9 @@ function addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm) {
   });
 }
 
+/**
+ * @summary simple function which takes the enforcement flags and the bid itself and determines if it should be floored
+ */
 function shouldFloorBid(floorData, floorInfo, bid) {
   let enforceJS = utils.deepAccess(floorData, 'enforcement.enforceJS') !== false;
   let shouldFloorDeal = utils.deepAccess(floorData, 'enforcement.floorDeals') === true || !bid.dealId;
@@ -547,6 +571,10 @@ function shouldFloorBid(floorData, floorInfo, bid) {
   return enforceJS && (bidBelowFloor && shouldFloorDeal);
 }
 
+/**
+ * @summary The main driving force of floors. On bidResponse we hook in and intercept bidResponses.
+ * And if the rule we find determines a bid should be floored we will do so.
+ */
 export function addBidResponseHook(fn, adUnitCode, bid) {
   let floorData = _floorDataForAuction[this.bidderRequest.auctionId];
   // if no floor data or associated bidRequest then bail
