@@ -201,7 +201,7 @@ export function getFloor(requestParams = {currency: 'USD', mediaType: '*', size:
   // if cpmAdjustment flag is true and we have a valid floor then run the adjustment on it
   if (floorData.enforcement.bidAdjustment && floorInfo.matchingFloor) {
     let cpmAdjustment = getBiddersCpmAdjustment(this.bidder, floorInfo.matchingFloor);
-    floorInfo.matchingFloor = calculateAdjustedFloor(floorInfo.matchingFloor, cpmAdjustment);
+    floorInfo.matchingFloor = cpmAdjustment ? calculateAdjustedFloor(floorInfo.matchingFloor, cpmAdjustment) : floorInfo.matchingFloor;
   }
 
   if (floorInfo.matchingFloor) {
