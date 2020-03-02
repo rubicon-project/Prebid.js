@@ -160,19 +160,19 @@ describe('the price floors module', function () {
   describe('getFirstMatchingFloor', function () {
     it('selects the right floor for different mediaTypes', function () {
       // banner with * size (not in rule file so does not do anything)
-      expect(getFirstMatchingFloor({...basicFloorData}, basicBidRequest, 'banner', '*')).to.deep.equal({
+      expect(getFirstMatchingFloor({...basicFloorData}, basicBidRequest, {mediaType: 'banner', size: '*'})).to.deep.equal({
         matchingFloor: 1.0,
         matchingData: 'banner',
         matchingRule: 'banner'
       });
       // video with * size (not in rule file so does not do anything)
-      expect(getFirstMatchingFloor({...basicFloorData}, basicBidRequest, 'video', '*')).to.deep.equal({
+      expect(getFirstMatchingFloor({...basicFloorData}, basicBidRequest, {mediaType: 'video', size: '*'})).to.deep.equal({
         matchingFloor: 5.0,
         matchingData: 'video',
         matchingRule: 'video'
       });
       // native (not in the rule list) with * size (not in rule file so does not do anything)
-      expect(getFirstMatchingFloor({...basicFloorData}, basicBidRequest, 'native', '*')).to.deep.equal({
+      expect(getFirstMatchingFloor({...basicFloorData}, basicBidRequest, {mediaType: 'native', size: '*'})).to.deep.equal({
         matchingFloor: 2.5,
         matchingData: 'native',
         matchingRule: '*'
@@ -194,25 +194,25 @@ describe('the price floors module', function () {
         }
       }
       // banner with 300x250 size
-      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, 'banner', [300, 250])).to.deep.equal({
+      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, {mediaType: 'banner', size: [300, 250]})).to.deep.equal({
         matchingFloor: 1.1,
         matchingData: '300x250',
         matchingRule: '300x250'
       });
       // video with 300x250 size
-      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, 'video', [300, 250])).to.deep.equal({
+      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, {mediaType: 'video', size: [300, 250]})).to.deep.equal({
         matchingFloor: 1.1,
         matchingData: '300x250',
         matchingRule: '300x250'
       });
       // native (not in the rule list) with 300x600 size
-      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, 'native', [600, 300])).to.deep.equal({
+      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, {mediaType: 'native', size: [600, 300]})).to.deep.equal({
         matchingFloor: 4.4,
         matchingData: '600x300',
         matchingRule: '600x300'
       });
       // n/a mediaType with a size not in file should go to catch all
-      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, undefined, [1, 1])).to.deep.equal({
+      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, {mediaType: undefined, size: [1, 1]})).to.deep.equal({
         matchingFloor: 5.5,
         matchingData: '1x1',
         matchingRule: '*'
@@ -235,27 +235,27 @@ describe('the price floors module', function () {
         default: 0.5
       };
       // banner with 300x250 size
-      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, 'banner', [300, 250])).to.deep.equal({
+      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, {mediaType: 'banner', size: [300, 250]})).to.deep.equal({
         matchingFloor: 1.1,
         matchingData: 'test_div_1^banner^300x250',
         matchingRule: 'test_div_1^banner^300x250'
       });
       // video with 300x250 size -> No matching rule so should use default
-      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, 'video', [300, 250])).to.deep.equal({
+      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, {mediaType: 'video', size: [300, 250]})).to.deep.equal({
         matchingFloor: 0.5,
         matchingData: 'test_div_1^video^300x250',
         matchingRule: undefined
       });
       // remove default and should still return the same floor as above since matches are cached
       delete inputFloorData.default;
-      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, 'video', [300, 250])).to.deep.equal({
+      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, {mediaType: 'video', size: [300, 250]})).to.deep.equal({
         matchingFloor: 0.5,
         matchingData: 'test_div_1^video^300x250',
         matchingRule: undefined
       });
       // update adUnitCode to test_div_2 with weird other params
       let newBidRequest = { ...basicBidRequest, adUnitCode: 'test_div_2' }
-      expect(getFirstMatchingFloor(inputFloorData, newBidRequest, 'badMediaType', [900, 900])).to.deep.equal({
+      expect(getFirstMatchingFloor(inputFloorData, newBidRequest, {mediaType: 'badmediatype', size: [900, 900]})).to.deep.equal({
         matchingFloor: 3.3,
         matchingData: 'test_div_2^badmediatype^900x900',
         matchingRule: 'test_div_2^*^*'
@@ -263,12 +263,12 @@ describe('the price floors module', function () {
     });
     it('it does not break if floorData has bad values', function () {
       let inputFloorData = {};
-      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, 'banner', '*')).to.deep.equal({
+      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, {mediaType: 'banner', size: '*'})).to.deep.equal({
         matchingFloor: undefined
       });
       // if default is there use it
       inputFloorData = { default: 5.0 };
-      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, 'banner', '*')).to.deep.equal({
+      expect(getFirstMatchingFloor(inputFloorData, basicBidRequest, {mediaType: 'banner', size: '*'})).to.deep.equal({
         matchingFloor: 5.0
       });
     });

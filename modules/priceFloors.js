@@ -70,9 +70,11 @@ function getHostNameFromReferer(referer) {
  * @summary floor field types with their matching functions to resolve the actual matched value
  */
 export let fieldMatchingFunctions = {
-  'gptSlot': bidObject => utils.getGptSlotInfoForAdUnitCode(bidObject.adUnitCode).gptSlot,
-  'domain': () => referrerHostname || getHostNameFromReferer(getRefererInfo().referer),
-  'adUnitCode': bidObject => bidObject.adUnitCode
+  'size': (bidRequest, bidResponse) => utils.parseGPTSingleSizeArray(bidResponse.size) || '*',
+  'mediaType': (bidRequest, bidResponse) => bidResponse.mediaType || 'banner',
+  'gptSlot': (bidRequest, bidResponse) => utils.getGptSlotInfoForAdUnitCode(bidRequest.adUnitCode).gptSlot,
+  'domain': (bidRequest, bidResponse) => referrerHostname || getHostNameFromReferer(getRefererInfo().referer),
+  'adUnitCode': (bidRequest, bidResponse) => bidRequest.adUnitCode
 };
 
 /**
@@ -80,17 +82,10 @@ export let fieldMatchingFunctions = {
  * a "*" catch-all match
  * Returns array of Tuple [exact match, catch all] for each field in rules file
  */
-function enumeratePossibleFieldValues(floorFields, bidObject, mediaType, size) {
+function enumeratePossibleFieldValues(floorFields, bidObject, responseObject) {
   // generate combination of all exact matches and catch all for each field type
   return floorFields.reduce((accum, field) => {
-    let exactMatch;
-    if (field === 'size') {
-      exactMatch = size;
-    } else if (field === 'mediaType') {
-      exactMatch = mediaType;
-    } else {
-      exactMatch = fieldMatchingFunctions[field](bidObject);
-    }
+    let exactMatch = fieldMatchingFunctions[field](bidObject, responseObject);
     // storing exact matches as lowerCase since we want to compare case insensitively
     accum.push(exactMatch === '*' ? ['*'] : [exactMatch.toLowerCase(), '*']);
     return accum;
@@ -101,11 +96,8 @@ function enumeratePossibleFieldValues(floorFields, bidObject, mediaType, size) {
  * @summary get's the first matching floor based on context provided.
  * Generates all possible rule matches and picks the first matching one.
  */
-export function getFirstMatchingFloor(floorData, bidObject, mediaType, size) {
-  mediaType = mediaType || 'banner';
-  size = utils.parseGPTSingleSizeArray(size) || '*';
-
-  let fieldValues = enumeratePossibleFieldValues(utils.deepAccess(floorData, 'schema.fields') || [], bidObject, mediaType, size);
+export function getFirstMatchingFloor(floorData, bidObject, responseObject = {}) {
+  let fieldValues = enumeratePossibleFieldValues(utils.deepAccess(floorData, 'schema.fields') || [], bidObject, responseObject);
   if (!fieldValues.length) return { matchingFloor: floorData.default };
   let matchingInput = fieldValues.map(field => field[0]).join('-');
   // if we already have gotten the matching rule from this matching input then use it! No need to look again
@@ -166,25 +158,31 @@ const getMediaTypesSizes = {
   native: (bid) => [utils.deepAccess(bid, 'mediaTypes.native.image.sizes')] || [],
 }
 
-/**
- * @summary This is the function which will return a single floor based on the input requests
- * and matching it to a rule for the current auction
- */
-export function getFloor(requestParams = {currency: 'USD', mediaType: '*', size: '*'}) {
-  let floorData = _floorDataForAuction[this.auctionId];
-  if (!floorData || floorData.skipped) return {};
-
+function updateRequestParamsFromContext(bidRequest, requestParams) {
   // if adapter asks for *'s then we can do some logic to infer if we can get a more specific rule based on context of bid
-  let mediaTypesOnBid = Object.keys(this.mediaTypes || {});
+  let mediaTypesOnBid = Object.keys(bidRequest.mediaTypes || {});
   // if there is only one mediaType then we can just use it
   if (requestParams.mediaType === '*' && mediaTypesOnBid.length === 1) {
     requestParams.mediaType = mediaTypesOnBid[0];
   }
   // if they asked for * size, but for the given mediaType there is only one size, we can just use it
-  if (requestParams.size === '*' && mediaTypesOnBid.indexOf(requestParams.mediaType) !== -1 && getMediaTypesSizes[requestParams.mediaType] && getMediaTypesSizes[requestParams.mediaType](this).length === 1) {
-    requestParams.size = getMediaTypesSizes[requestParams.mediaType](this)[0];
+  if (requestParams.size === '*' && mediaTypesOnBid.indexOf(requestParams.mediaType) !== -1 && getMediaTypesSizes[requestParams.mediaType] && getMediaTypesSizes[requestParams.mediaType](bidRequest).length === 1) {
+    requestParams.size = getMediaTypesSizes[requestParams.mediaType](bidRequest)[0];
   }
-  let floorInfo = getFirstMatchingFloor(floorData.data, this, requestParams.mediaType, requestParams.size);
+  return requestParams;
+}
+
+/**
+ * @summary This is the function which will return a single floor based on the input requests
+ * and matching it to a rule for the current auction
+ */
+export function getFloor(requestParams = {currency: 'USD', mediaType: '*', size: '*'}) {
+  let bidRequest = this;
+  let floorData = _floorDataForAuction[bidRequest.auctionId];
+  if (!floorData || floorData.skipped) return {};
+
+  requestParams = updateRequestParamsFromContext(bidRequest, requestParams);
+  let floorInfo = getFirstMatchingFloor(floorData.data, {...bidRequest}, {mediaType: requestParams.mediaType, size: requestParams.size});
   let currency = requestParams.currency || floorData.data.currency;
 
   // if bidder asked for a currency which is not what floors are set in convert
@@ -192,7 +190,7 @@ export function getFloor(requestParams = {currency: 'USD', mediaType: '*', size:
     try {
       floorInfo.matchingFloor = getGlobal().convertCurrency(floorInfo.matchingFloor, floorData.data.currency, currency);
     } catch (err) {
-      utils.logWarn(`${MODULE_NAME}: Unable to get currency conversion for getFloor for bidder ${this.bidder}. You must have currency module enabled with defaultRates in your currency config`);
+      utils.logWarn(`${MODULE_NAME}: Unable to get currency conversion for getFloor for bidder ${bidRequest.bidder}. You must have currency module enabled with defaultRates in your currency config`);
       // since we were unable to convert to the bidders requested currency, we send back just the actual floors currency to them
       currency = floorData.data.currency;
     }
@@ -200,7 +198,7 @@ export function getFloor(requestParams = {currency: 'USD', mediaType: '*', size:
 
   // if cpmAdjustment flag is true and we have a valid floor then run the adjustment on it
   if (floorData.enforcement.bidAdjustment && floorInfo.matchingFloor) {
-    let cpmAdjustment = getBiddersCpmAdjustment(this.bidder, floorInfo.matchingFloor);
+    let cpmAdjustment = getBiddersCpmAdjustment(bidRequest.bidder, floorInfo.matchingFloor);
     floorInfo.matchingFloor = cpmAdjustment ? calculateAdjustedFloor(floorInfo.matchingFloor, cpmAdjustment) : floorInfo.matchingFloor;
   }
 
@@ -558,7 +556,7 @@ export function addBidResponseHook(fn, adUnitCode, bid) {
   }
 
   // get the matching rule
-  let floorInfo = getFirstMatchingFloor(floorData.data, matchingBidRequest, bid.mediaType, [bid.width, bid.height]);
+  let floorInfo = getFirstMatchingFloor(floorData.data, {...matchingBidRequest}, {...bid, size: [bid.width, bid.height]});
 
   if (!floorInfo.matchingFloor) {
     utils.logWarn(`${MODULE_NAME}: unable to determine a matching price floor for bidResponse`, bid);
