@@ -23,7 +23,7 @@ const ajax = ajaxBuilder(10000);
 /**
  * @summary Allowed fields for rules to have
  */
-const allowedFields = ['gptSlot', 'adUnitCode', 'size', 'domain', 'mediaType'];
+export let allowedFields = ['gptSlot', 'adUnitCode', 'size', 'domain', 'mediaType'];
 
 /**
  * @summary This is a flag to indicate if a AJAX call is processing for a floors request
@@ -69,7 +69,7 @@ function getHostNameFromReferer(referer) {
 /**
  * @summary floor field types with their matching functions to resolve the actual matched value
  */
-const fieldMatchingFunctions = {
+export let fieldMatchingFunctions = {
   'gptSlot': bidObject => utils.getGptSlotInfoForAdUnitCode(bidObject.adUnitCode).gptSlot,
   'domain': () => referrerHostname || getHostNameFromReferer(getRefererInfo().referer),
   'adUnitCode': bidObject => bidObject.adUnitCode
@@ -104,16 +104,14 @@ function enumeratePossibleFieldValues(floorFields, bidObject, mediaType, size) {
 export function getFirstMatchingFloor(floorData, bidObject, mediaType, size) {
   mediaType = mediaType || 'banner';
   size = utils.parseGPTSingleSizeArray(size) || '*';
-  let matchingInput = `${bidObject.adUnitCode}-${mediaType}-${size}`;
 
+  let fieldValues = enumeratePossibleFieldValues(utils.deepAccess(floorData, 'schema.fields') || [], bidObject, mediaType, size);
+  if (!fieldValues.length) return { matchingFloor: floorData.default };
+  let matchingInput = fieldValues.map(field => field[0]).join('-');
   // if we already have gotten the matching rule from this matching input then use it! No need to look again
   if (utils.deepAccess(floorData, `matchingInputs.${matchingInput}`)) {
     return floorData.matchingInputs[matchingInput];
   }
-
-  // Otherwise we will generate the permutations based on input and find first matching key
-  let fieldValues = enumeratePossibleFieldValues(utils.deepAccess(floorData, 'schema.fields') || [], bidObject, mediaType, size);
-  if (!fieldValues.length) return { matchingFloor: floorData.default };
   let allPossibleMatches = generatePossibleEnumerations(fieldValues, utils.deepAccess(floorData, 'schema.delimiter') || '|');
   let matchingRule = find(allPossibleMatches, hashValue => floorData.values.hasOwnProperty(hashValue));
 
@@ -469,6 +467,19 @@ export function generateAndHandleFetch(floorEndpoint) {
 };
 
 /**
+ * @summary Updates our allowedFields and fieldMatchingFunctions with the publisher defined new ones
+ */
+function addFieldOverrides(overrides) {
+  Object.keys(overrides).forEach(override => {
+    // we only add it if it is not already in the allowed fields and if the passed in value is a function
+    if (allowedFields.indexOf(override) === -1 && typeof overrides[override] === 'function') {
+      allowedFields.push(override);
+      fieldMatchingFunctions[override] = overrides[override];
+    }
+  });
+}
+
+/**
  * @summary This is the function which controls what happens during a pbjs.setConfig({...floors: {}}) is called
  */
 export function handleSetFloorsConfig(config) {
@@ -482,7 +493,8 @@ export function handleSetFloorsConfig(config) {
       'floorDeals', floorDeals => floorDeals === true, // defaults to false
       'bidAdjustment', bidAdjustment => bidAdjustment !== false, // defaults to true
     ]),
-    'data', data => data ? parseFloorData(data, 'setConfig') : _floorsConfig.data // do not overwrite if passed in data not valid
+    'additionalSchemaFields', additionalSchemaFields => typeof additionalSchemaFields === 'object' && Object.keys(additionalSchemaFields).length > 0 ? addFieldOverrides(additionalSchemaFields) : undefined,
+    'data', data => parseFloorData(data, 'setConfig') || _floorsConfig.data // do not overwrite if passed in data not valid
   ]);
 
   // if enabled then do some stuff
@@ -497,7 +509,9 @@ export function handleSetFloorsConfig(config) {
 
       // we want our hooks to run after the currency hooks
       getGlobal().requestBids.before(requestBidsHook, 50);
-      getHook('addBidResponse').before(addBidResponseHook, 50);
+      // if user has debug on then we want to allow the debugging module to run before this, assuming they are testing priceFloors
+      // debugging is currently set at 5 priority
+      getHook('addBidResponse').before(addBidResponseHook, utils.debugTurnedOn() ? 4 : 50);
       addedFloorsHook = true;
     }
   } else {

@@ -10,7 +10,9 @@ import {
   handleSetFloorsConfig,
   requestBidsHook,
   isFloorsDataValid,
-  addBidResponseHook
+  addBidResponseHook,
+  fieldMatchingFunctions,
+  allowedFields
 } from 'modules/priceFloors.js';
 
 describe('the price floors module', function () {
@@ -66,6 +68,8 @@ describe('the price floors module', function () {
     sandbox.restore();
     utils.logError.restore();
     utils.logWarn.restore();
+    // reset global bidder settings so no weird test side effects
+    getGlobal().bidderSettings = {};
   });
 
   describe('getFloorsDataForAuction', function () {
@@ -285,6 +289,10 @@ describe('the price floors module', function () {
     };
     let fakeFloorProvider;
     let clock;
+    let actualAllowedFields = allowedFields;
+    let actualFieldMatchingFunctions = fieldMatchingFunctions;
+    const defaultAllowedFields = [...allowedFields];
+    const defaultMatchingFunctions = {...fieldMatchingFunctions};
     before(function () {
       clock = sinon.useFakeTimers();
     });
@@ -297,6 +305,8 @@ describe('the price floors module', function () {
     afterEach(function() {
       fakeFloorProvider.restore();
       exposedAdUnits = undefined;
+      actualAllowedFields = [...defaultAllowedFields];
+      actualFieldMatchingFunctions = {...defaultMatchingFunctions};
     });
     it('should not do floor stuff if no resulting floor object can be resolved for auciton', function () {
       handleSetFloorsConfig({
@@ -343,6 +353,83 @@ describe('the price floors module', function () {
         skipped: false,
         modelVersion: 'basic model',
         location: 'setConfig',
+      });
+    });
+    it('should not overwrite previous data object if the new one is bad', function () {
+      handleSetFloorsConfig({...basicFloorConfig});
+      handleSetFloorsConfig({
+        ...basicFloorConfig,
+        data: undefined
+      });
+      handleSetFloorsConfig({
+        ...basicFloorConfig,
+        data: 5
+      });
+      handleSetFloorsConfig({
+        ...basicFloorConfig,
+        data: {
+          schema: {fields: ['thisIsNotAllowedSoShouldFail']},
+          values: {'*': 1.2},
+          modelVersion: 'FAIL'
+        }
+      });
+      runStandardAuction();
+      validateBidRequests(true, {
+        skipped: false,
+        modelVersion: 'basic model',
+        location: 'setConfig',
+      });
+    });
+    it('should dynamically add new schema fileds and functions if added via setConfig', function () {
+      let deviceSpoof;
+      handleSetFloorsConfig({
+        ...basicFloorConfig,
+        data: {
+          schema: {fields: ['deviceType']},
+          values: {
+            'mobile': 1.0,
+            'desktop': 2.0,
+            'tablet': 3.0,
+            '*': 4.0
+          }
+        },
+        additionalSchemaFields: {
+          deviceType: () => deviceSpoof
+        }
+      });
+      expect(allowedFields).to.contain('deviceType');
+      expect(fieldMatchingFunctions['deviceType']).to.be.a('function');
+
+      // run getFloor to make sure it selcts right stuff! (other params do not matter since we only are testing deviceType)
+      runStandardAuction();
+
+      // set deviceType to mobile;
+      deviceSpoof = 'mobile';
+      exposedAdUnits[0].bids[0].auctionId = basicBidRequest.auctionId
+      expect(exposedAdUnits[0].bids[0].getFloor()).to.deep.equal({
+        currency: 'USD',
+        floor: 1.0 // 'mobile': 1.0,
+      });
+
+      // set deviceType to desktop;
+      deviceSpoof = 'desktop';
+      expect(exposedAdUnits[0].bids[0].getFloor()).to.deep.equal({
+        currency: 'USD',
+        floor: 2.0 // 'desktop': 2.0,
+      });
+
+      // set deviceType to tablet;
+      deviceSpoof = 'tablet';
+      expect(exposedAdUnits[0].bids[0].getFloor()).to.deep.equal({
+        currency: 'USD',
+        floor: 3.0 // 'tablet': 3.0
+      });
+
+      // set deviceType to unknown;
+      deviceSpoof = 'unknown';
+      expect(exposedAdUnits[0].bids[0].getFloor()).to.deep.equal({
+        currency: 'USD',
+        floor: 4.0 // '*': 4.0
       });
     });
     it('Should continue auction of delay is hit without a response from floor provider', function () {
@@ -645,9 +732,105 @@ describe('the price floors module', function () {
           currency: 'USD',
           floor: 1.3334 // 1.3334 * 0.75 = 1.000005 which is the floor (we cut off getFloor at 4 decimal points)
         });
+      });
+      it('should correctly pick the right attributes if * is passed in and context can be assumed', function () {
+        let inputBidReq = {
+          bidder: 'rubicon',
+          adUnitCode: 'test_div_2',
+          auctionId: '987654321',
+          mediaTypes: {
+            video: {}
+          },
+          getFloor
+        };
+        _floorDataForAuction[inputBidReq.auctionId] = utils.deepClone(basicFloorConfig);
+        _floorDataForAuction[inputBidReq.auctionId].data.values = {
+          '*': 1.0,
+          'banner': 3.0,
+          'video': 5.0
+        };
 
-        // reset global bidder settings so no weird test side effects
-        getGlobal().bidderSettings = {};
+        // because bid req only has video, if a bidder asks for a floor for * we can actually give them the right mediaType
+        expect(inputBidReq.getFloor({mediaType: '*'})).to.deep.equal({
+          currency: 'USD',
+          floor: 5.0 // 'video': 5.0
+        });
+        delete _floorDataForAuction[inputBidReq.auctionId].data.matchingInputs;
+
+        // Same for if only banner is in the input bid
+        inputBidReq.mediaTypes = {banner: {}};
+        expect(inputBidReq.getFloor({mediaType: '*'})).to.deep.equal({
+          currency: 'USD',
+          floor: 3.0 // 'banner': 3.0,
+        });
+        delete _floorDataForAuction[inputBidReq.auctionId].data.matchingInputs;
+
+        // if both are present then it will really use the *
+        inputBidReq.mediaTypes = {banner: {}, video: {}};
+        expect(inputBidReq.getFloor({mediaType: '*'})).to.deep.equal({
+          currency: 'USD',
+          floor: 1.0 // '*': 1.0,
+        });
+        delete _floorDataForAuction[inputBidReq.auctionId].data.matchingInputs;
+
+        // now if size can be inferred (meaning only one size is in the specified mediaType, it will use it)
+        _floorDataForAuction[inputBidReq.auctionId].data.schema.fields = ['mediaType', 'size'];
+        _floorDataForAuction[inputBidReq.auctionId].data.values = {
+          '*|*': 1.0,
+          'banner|300x250': 2.0,
+          'banner|728x90': 3.0,
+          'banner|*': 4.0,
+          'video|300x250': 5.0,
+          'video|728x90': 6.0,
+          'video|*': 7.0
+        };
+        // mediaType is banner and only one size, so if someone asks for banner * we should give them banner 300x250
+        // instead of banner|*
+        inputBidReq.mediaTypes = {banner: {sizes: [[300, 250]]}};
+        expect(inputBidReq.getFloor({mediaType: 'banner', size: '*'})).to.deep.equal({
+          currency: 'USD',
+          floor: 2.0 // 'banner|300x250': 2.0,
+        });
+        delete _floorDataForAuction[inputBidReq.auctionId].data.matchingInputs;
+
+        // now for video it should look at playersize (prebid core translates playersize into typical array of size arrays)
+        inputBidReq.mediaTypes = {video: {playerSize: [[728, 90]]}};
+        expect(inputBidReq.getFloor({mediaType: 'video', size: '*'})).to.deep.equal({
+          currency: 'USD',
+          floor: 6.0 // 'video|728x90': 6.0,
+        });
+        delete _floorDataForAuction[inputBidReq.auctionId].data.matchingInputs;
+
+        // Now if multiple sizes are there, it will actually use * since can't infer
+        inputBidReq.mediaTypes = {banner: {sizes: [[300, 250], [728, 90]]}};
+        expect(inputBidReq.getFloor({mediaType: 'banner', size: '*'})).to.deep.equal({
+          currency: 'USD',
+          floor: 4.0 // 'banner|*': 4.0,
+        });
+        delete _floorDataForAuction[inputBidReq.auctionId].data.matchingInputs;
+
+        // lastly, if you pass in * mediaType and * size it should resolve both if possble
+        inputBidReq.mediaTypes = {banner: {sizes: [[300, 250]]}};
+        expect(inputBidReq.getFloor({mediaType: '*', size: '*'})).to.deep.equal({
+          currency: 'USD',
+          floor: 2.0 // 'banner|300x250': 2.0,
+        });
+        delete _floorDataForAuction[inputBidReq.auctionId].data.matchingInputs;
+
+        inputBidReq.mediaTypes = {video: {playerSize: [[300, 250]]}};
+        expect(inputBidReq.getFloor({mediaType: '*', size: '*'})).to.deep.equal({
+          currency: 'USD',
+          floor: 5.0 // 'video|300x250': 5.0,
+        });
+        delete _floorDataForAuction[inputBidReq.auctionId].data.matchingInputs;
+
+        // now it has both mediaTypes so will use * mediaType and thus not use sizes either
+        inputBidReq.mediaTypes = {video: {playerSize: [[300, 250]]}, banner: {sizes: [[300, 250]]}};
+        expect(inputBidReq.getFloor({mediaType: '*', size: '*'})).to.deep.equal({
+          currency: 'USD',
+          floor: 1.0 // '*|*': 1.0,
+        });
+        delete _floorDataForAuction[inputBidReq.auctionId].data.matchingInputs;
       });
     });
   });
