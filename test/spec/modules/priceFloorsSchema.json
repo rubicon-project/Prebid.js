@@ -19,19 +19,10 @@
           "type": "array",
           "description": "The list of fields to be used for matching criteria of a bid response with a price floor",
           "minItems": 1,
-          "maxItems": 5,
           "uniqueItems": true,
           "additionalItems": false,
           "items": {
-            "type": "string",
-            "description": "The allowed field types to be enforced",
-            "enum": [
-              "gptSlot",
-              "mediaType",
-              "size",
-              "adUnitCode",
-              "domain"
-            ]
+            "type": "string"
           }
         },
         "delimiter": {

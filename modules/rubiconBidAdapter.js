@@ -186,13 +186,13 @@ export const spec = {
       }
 
       let bidFloor;
-      if (bidRequest.getFloor && !config.getConfig('rubicon.disableFloors')) {
+      if (typeof bidRequest.getFloor === 'function' && !config.getConfig('rubicon.disableFloors')) {
         let floorInfo = bidRequest.getFloor({
           currency: 'USD',
           mediaType: 'video',
           size: parseSizes(bidRequest, 'video')
         });
-        bidFloor = floorInfo.currency === 'USD' ? floorInfo.floor : undefined;
+        bidFloor = typeof floorInfo === 'object' && floorInfo.currency === 'USD' && !isNaN(floorInfo.floor) ? parseFloat(floorInfo.floor) : undefined;
       } else {
         bidFloor = parseFloat(utils.deepAccess(bidRequest, 'params.floor'));
       }
@@ -504,7 +504,7 @@ export const spec = {
         mediaType: 'banner',
         size: '*'
       });
-      data['rp_hard_floor'] = floorInfo.currency === 'USD' ? floorInfo.floor : undefined;
+      data['rp_hard_floor'] = typeof floorInfo === 'object' && floorInfo.currency === 'USD' && !isNaN(floorInfo.floor) ? floorInfo.floor : undefined;
     }
 
     // add p_pos only if specified and valid

@@ -149,6 +149,7 @@ function sendMessage(auctionId, bidWonId) {
           'adSlot'
         ]);
         adUnit.bids = [];
+        adUnit.status = 'no-bid'; // default it to be no bid
       }
 
       // Add site and zone id if not there and if we found a rubicon bidder
