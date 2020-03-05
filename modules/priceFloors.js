@@ -63,7 +63,7 @@ let referrerHostname;
 function getHostNameFromReferer(referer) {
   referrerHostname = urlParse(referer).hostname;
   return referrerHostname;
-};
+}
 
 /**
  * @summary floor field types with their matching functions to resolve the actual matched value
@@ -74,7 +74,7 @@ export let fieldMatchingFunctions = {
   'gptSlot': (bidRequest, bidResponse) => utils.getGptSlotInfoForAdUnitCode(bidRequest.adUnitCode).gptSlot,
   'domain': (bidRequest, bidResponse) => referrerHostname || getHostNameFromReferer(getRefererInfo().referer),
   'adUnitCode': (bidRequest, bidResponse) => bidRequest.adUnitCode
-};
+}
 
 /**
  * @summary Based on the fields array in floors data, it enumerates all possible matches based on exact match coupled with
@@ -89,7 +89,7 @@ function enumeratePossibleFieldValues(floorFields, bidObject, responseObject) {
     accum.push(exactMatch === '*' ? ['*'] : [exactMatch.toLowerCase(), '*']);
     return accum;
   }, []);
-};
+}
 
 /**
  * @summary get's the first matching floor based on context provided.
@@ -116,8 +116,8 @@ export function getFirstMatchingFloor(floorData, bidObject, responseObject = {})
   };
   // save for later lookup if needed
   utils.deepSetValue(floorData, `matchingInputs.${matchingInput}`, {...matchingData});
-  return matchingData
-};
+  return matchingData;
+}
 
 /**
  * @summary Generates all possible rule hash's based on input array of array's
@@ -133,8 +133,8 @@ function generatePossibleEnumerations(arrayOfFields, delimiter) {
       });
     });
     return ret;
-  }).sort((left, right) => (left.split('*').length - 1) - (right.split('*').length - 1));
-};
+  }).sort((left, right) => left.split('*').length - right.split('*').length);
+}
 
 /**
  * @summary If a the input bidder has a registered cpmadjustment it returns the input CPM after being adjusted
@@ -145,14 +145,14 @@ export function getBiddersCpmAdjustment(bidderName, inputCpm) {
     return parseFloat(adjustmentFunction(inputCpm));
   }
   return parseFloat(inputCpm);
-};
+}
 
 /**
  * @summary This function takes the original floor and the adjusted floor in order to determine the bidders actual floor
  */
 export function calculateAdjustedFloor(oldFloor, newFloor) {
   return oldFloor / newFloor * oldFloor;
-};
+}
 
 /**
  * @summary gets the prebid set sizes depending on the input mediaType
@@ -218,7 +218,7 @@ export function getFloor(requestParams = {currency: 'USD', mediaType: '*', size:
     };
   }
   return {};
-};
+}
 
 /**
  * @summary Takes a floorsData object and converts it into a hash map with appropriate keys
@@ -230,7 +230,7 @@ export function getFloorsDataForAuction(floorData, adUnitCode) {
   // default the currency to USD if not passed in
   auctionFloorData.currency = auctionFloorData.currency || 'USD';
   return auctionFloorData;
-};
+}
 
 /**
  * @summary if adUnitCode needs to be added to the offset then it will add it else just return the values
@@ -247,7 +247,7 @@ function normalizeRulesForAuction(floorData, adUnitCode) {
     rulesHash[newKey.toLowerCase()] = floorData.values[oldKey];
     return rulesHash;
   }, {});
-};
+}
 
 /**
  * @summary This function will take the adUnits and generate a floor data object to be used during the auction
@@ -268,7 +268,7 @@ export function getFloorDataFromAdUnits(adUnits) {
     }
     return accum;
   }, {});
-};
+}
 
 /**
  * @summary This function takes the adUnits for the auction and update them accordingly as well as returns the rules hashmap for the auction
@@ -289,7 +289,7 @@ export function updateAdUnitsForAuction(adUnits, floorData, skipped) {
       }
     });
   });
-};
+}
 
 /**
  * @summary Updates the adUnits accordingly and returns the necessary floorsData for the current auction
@@ -309,11 +309,11 @@ export function createFloorsDataForAuction(adUnits) {
     return;
   }
   // determine the skip rate now
-  const isSkipped = Math.random() * 100 < (utils.deepAccess(resolvedFloorsData, 'data.skipRate') || 0);
+  const isSkipped = Math.random() * 100 < parseFloat(utils.deepAccess(resolvedFloorsData, 'data.skipRate') || 0);
   resolvedFloorsData.skipped = isSkipped;
   updateAdUnitsForAuction(adUnits, resolvedFloorsData, isSkipped);
   return resolvedFloorsData;
-};
+}
 
 /**
  * @summary This is the function which will be called to exit our module and continue the auction.
@@ -333,7 +333,7 @@ export function continueAuction(hookConfig) {
     hookConfig.nextFn.apply(hookConfig.context, [hookConfig.reqBidsConfigObj]);
     hookConfig.hasExited = true;
   }
-};
+}
 
 function validateSchemaFields(fields) {
   if (Array.isArray(fields) && fields.length > 0 && fields.every(field => allowedFields.includes(field))) {
@@ -341,14 +341,14 @@ function validateSchemaFields(fields) {
   }
   utils.logError(`${MODULE_NAME}: Fields recieved do not match allowed fields`);
   return false;
-};
+}
 
 function isValidRule(key, floor, numFields, delimiter) {
   if (typeof key !== 'string' || key.split(delimiter).length !== numFields) {
     return false;
   }
   return typeof floor === 'number';
-};
+}
 
 function validateRules(floorsData, numFields, delimiter) {
   if (typeof floorsData.values !== 'object') {
@@ -363,7 +363,7 @@ function validateRules(floorsData, numFields, delimiter) {
   }, {});
   // rules is only valid if at least one rule remains
   return Object.keys(floorsData.values).length > 0;
-};
+}
 
 /**
  * @summary Fields array should have at least one entry and all should match allowed fields
@@ -380,7 +380,7 @@ export function isFloorsDataValid(floorsData) {
     return false;
   }
   return validateRules(floorsData, floorsData.schema.fields.length, floorsData.schema.delimiter || '|')
-};
+}
 
 /**
  * @summary This function updates the global Floors Data field based on the new one passed in if it is valid
@@ -393,7 +393,7 @@ export function parseFloorData(floorsData, location) {
     };
   }
   utils.logError(`${MODULE_NAME}: The floors data did not contain correct values`, floorsData);
-};
+}
 
 /**
  *
@@ -420,7 +420,7 @@ export function requestBidsHook(fn, reqBidsConfigObj) {
   } else {
     continueAuction(hookConfig);
   }
-};
+}
 
 /**
  * @summary If an auction was queued to be delayed (waiting for a fetch) then this function will resume
@@ -452,7 +452,7 @@ export function handleFetchResponse(fetchResponse) {
 
   // if any auctions are waiting for fetch to finish, we need to continue them!
   resumeDelayedAuctions();
-};
+}
 
 function handleFetchError(status) {
   fetching = false;
@@ -460,7 +460,7 @@ function handleFetchError(status) {
 
   // if any auctions are waiting for fetch to finish, we need to continue them!
   resumeDelayedAuctions();
-};
+}
 
 /**
  * This function handles sending and recieving the AJAX call for a floors fetch
@@ -480,7 +480,7 @@ export function generateAndHandleFetch(floorEndpoint) {
   } else if (fetching) {
     utils.logWarn(`${MODULE_NAME}: A fetch is already occuring. Skipping.`);
   }
-};
+}
 
 /**
  * @summary Updates our allowedFields and fieldMatchingFunctions with the publisher defined new ones
@@ -541,7 +541,7 @@ export function handleSetFloorsConfig(config) {
 
     addedFloorsHook = false;
   }
-};
+}
 
 /**
  * @summary Analytics adapters especially need context of what the floors module is doing in order
@@ -563,7 +563,7 @@ function addFloorDataToBid(floorData, floorInfo, bid, adjustedCpm) {
 }
 
 /**
- * @summary simple function which takes the enforcement flags and the bid itself and determines if it should be floored
+ * @summary takes the enforcement flags and the bid itself and determines if it should be floored
  */
 function shouldFloorBid(floorData, floorInfo, bid) {
   let enforceJS = utils.deepAccess(floorData, 'enforcement.enforceJS') !== false;
