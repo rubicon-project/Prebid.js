@@ -739,11 +739,12 @@ export const spec = {
       const associatedBidRequest = Array.isArray(bidRequest) ? bidRequest[i] : bidRequest;
 
       if (associatedBidRequest && typeof associatedBidRequest === 'object') {
+        const rawPrice = ad.cpm || 0;
         let bid = {
           requestId: associatedBidRequest.bidId,
           currency: 'USD',
           creativeId: ad.creative_id || `${ad.network || ''}-${ad.advertiser || ''}`,
-          cpm: ad.cpm || 0,
+          cpm: rubiConf.shouldRoundBids ? Math.ceil(rawPrice * 100) / 100 : rawPrice,
           dealId: ad.deal,
           ttl: 300, // 5 minutes
           netRevenue: rubiConf.netRevenue !== false, // If anything other than false, netRev is true

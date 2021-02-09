@@ -167,6 +167,7 @@ function sendMessage(auctionId, bidWonId) {
     referrerHostname: rubiconAdapter.referrerHostname || getHostNameFromReferer(referrer),
     channel: 'web',
   };
+  message.version += rubiConf.shouldRoundBids ? '-t' : '-c'
   if (rubiConf.wrapperName || rubiConf.rule_name) {
     message.wrapper = {
       name: rubiConf.wrapperName,

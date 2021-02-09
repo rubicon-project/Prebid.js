@@ -537,6 +537,8 @@ const ANALYTICS_MESSAGE = {
   }
 };
 
+ANALYTICS_MESSAGE.version += '-c';
+
 function performStandardAuction(gptEvents) {
   events.emit(AUCTION_INIT, MOCK.AUCTION_INIT);
   events.emit(BID_REQUESTED, MOCK.BID_REQUESTED);
